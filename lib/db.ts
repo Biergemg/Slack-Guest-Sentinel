@@ -7,10 +7,10 @@
  * The env module validates both required variables at startup.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
 
-let _supabase: ReturnType<typeof createClient>;
+let _supabase: SupabaseClient<any, "public", any>;
 function getSupabase() {
   if (!_supabase) {
     _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -24,7 +24,7 @@ function getSupabase() {
   return _supabase;
 }
 
-export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+export const supabase = new Proxy({} as SupabaseClient<any, "public", any>, {
   get: (_, prop: string | symbol) => {
     const client = getSupabase();
     const value = (client as any)[prop];
