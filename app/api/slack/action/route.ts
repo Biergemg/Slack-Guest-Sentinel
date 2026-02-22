@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { verifySlackSignature } from '@/lib/slack';
 import { slackActionService } from '@/services/slack-action.service';
 import { logger } from '@/lib/logger';

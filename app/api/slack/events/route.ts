@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { verifySlackSignature } from '@/lib/slack';
 import { slackEventService } from '@/services/slack-event.service';

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { auditService } from '@/services/audit.service';
 import { env } from '@/lib/env';
