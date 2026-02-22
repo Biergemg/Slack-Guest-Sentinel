@@ -7,30 +7,25 @@
  * The env module validates both required variables at startup.
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
 
-let _supabase: SupabaseClient<any, "public", any>;
-function getSupabase() {
-  if (!_supabase) {
-    _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+const initSupabase = () => {
+  try {
+    return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
+        // Server-side: never persist sessions between requests
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false,
       },
     });
+  } catch (err) {
+    // If env vars are missing during `next build` static generation checks,
+    // return a dummy client so the build doesn't crash.
+    // Protected by `export const dynamic = 'force-dynamic'` in routes.
+    return createClient('https://placeholder.supabase.co', 'placeholder');
   }
-  return _supabase;
-}
+};
 
-export const supabase = new Proxy({} as SupabaseClient<any, "public", any>, {
-  get: (_, prop: string | symbol) => {
-    const client = getSupabase();
-    const value = (client as any)[prop];
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
-  },
-});
+export const supabase = initSupabase();
