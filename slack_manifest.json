@@ -1,0 +1,28 @@
+{
+    "display_information": {
+        "name": "Slack Guest Sentinel",
+        "description": "Protege tu presupuesto detectando y gestionando cuentas de invitados inactivas.",
+        "background_color": "#181a1f"
+    },
+    "oauth_config": {
+        "redirect_urls": [
+            "https://sentinelexpress.loca.lt/api/slack/callback"
+        ],
+        "scopes": {
+            "user": [
+                "users:read",
+                "chat:write",
+                "im:write"
+            ]
+        }
+    },
+    "settings": {
+        "interactivity": {
+            "is_enabled": true,
+            "request_url": "https://sentinelexpress.loca.lt/api/slack/action"
+        },
+        "org_deploy_enabled": false,
+        "socket_mode_enabled": false,
+        "token_rotation_enabled": false
+    }
+}
