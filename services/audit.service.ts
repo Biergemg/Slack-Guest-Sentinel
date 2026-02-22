@@ -132,10 +132,23 @@ export class AuditService {
         this.clearActiveGuests(workspace.id, activeGuests.map(sg => sg.guest.id)),
       ]);
 
-      // Send DM alerts in parallel (failures are caught per alert)
+      // Fetch sponsors for all inactive guests in one batch query.
+      // sponsor = null is expected when Slack didn't fire invite_requested — not an error.
+      const sponsorMap = await this.fetchSponsors(
+        workspace.id,
+        inactiveGuests.map(sg => sg.guest.id)
+      );
+
+      // Send DM alerts in parallel (failures isolated per guest)
       await Promise.allSettled(
         inactiveGuests.map(sg =>
-          this.sendInactiveAlert(token, workspace, sg.guest.id, costPerSeat)
+          this.sendInactiveAlert(
+            token,
+            workspace,
+            sg.guest.id,
+            costPerSeat,
+            sponsorMap.get(sg.guest.id) ?? null
+          )
         )
       );
 
@@ -266,14 +279,42 @@ export class AuditService {
     }
   }
 
+  /**
+   * Returns a map of guestSlackId → sponsorSlackId for the given guest IDs.
+   * Guests with no captured sponsor are absent from the map (sponsor unknown).
+   * A missing sponsor is normal — Slack doesn't always fire invite_requested.
+   */
+  private async fetchSponsors(
+    workspaceId: string,
+    guestSlackIds: string[]
+  ): Promise<Map<string, string>> {
+    if (guestSlackIds.length === 0) return new Map();
+
+    const { data, error } = await supabase
+      .from('guest_sponsors')
+      .select('guest_user_id, sponsor_user_id')
+      .eq('workspace_id', workspaceId)
+      .in('guest_user_id', guestSlackIds);
+
+    if (error) {
+      logger.warn('Failed to fetch guest sponsors — DMs will omit sponsor info', { workspaceId }, error);
+      return new Map();
+    }
+
+    return new Map(
+      (data ?? []).map(row => [row.guest_user_id as string, row.sponsor_user_id as string])
+    );
+  }
+
   private async sendInactiveAlert(
     token: string,
     workspace: Workspace,
     guestId: string,
-    costPerSeat: number
+    costPerSeat: number,
+    sponsorId: string | null
   ): Promise<void> {
     try {
-      const blocks = buildInactiveGuestBlocks(guestId, costPerSeat);
+      const blocks = buildInactiveGuestBlocks(guestId, costPerSeat, sponsorId);
       await sendDirectMessage(
         token,
         workspace.installed_by,
@@ -284,7 +325,7 @@ export class AuditService {
       await supabase.from('events').insert({
         workspace_id: workspace.id,
         type: WORKSPACE_EVENT_TYPE.DM_ALERT_SENT,
-        payload: { guest_id: guestId, admin_id: workspace.installed_by },
+        payload: { guest_id: guestId, admin_id: workspace.installed_by, sponsor_id: sponsorId },
       });
     } catch (err) {
       logger.error('Failed to send DM alert', { workspaceId: workspace.id, guestId }, err);

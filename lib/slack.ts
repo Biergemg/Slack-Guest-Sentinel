@@ -246,7 +246,12 @@ export async function getLastMessageTs(
   });
 
   if (!channelsData.ok || !channelsData.channels?.length) {
-    logger.warn('users.conversations returned no channels', { userId, error: channelsData.error });
+    // missing_scope means the app needs channels:read and users must reinstall
+    if (channelsData.error === 'missing_scope') {
+      logger.warn('users.conversations missing scope — add channels:read and ask workspace to reinstall', { userId });
+    } else {
+      logger.warn('users.conversations returned no channels', { userId, error: channelsData.error });
+    }
     return null;
   }
 
@@ -264,7 +269,34 @@ export async function getLastMessageTs(
       token,
     });
 
-    if (!histData.ok || !histData.messages?.length) continue;
+    if (!histData.ok) {
+      // These errors mean we can't access this channel — skip and try the next one.
+      // not_in_channel: guest/admin not a member (normal for shared channels)
+      // channel_not_found: archived or deleted after channels:read fetched
+      // restricted_action: Slack Connect channel with extra restrictions
+      const skipSilently = ['not_in_channel', 'channel_not_found', 'restricted_action'];
+
+      if (histData.error === 'missing_scope') {
+        // Scope was added but token is from an old install — log once and bail entirely
+        logger.warn('conversations.history missing scope — add channels:history and ask workspace to reinstall', {
+          userId,
+          channelId: channel.id,
+        });
+        return null;
+      }
+
+      if (!skipSilently.includes(histData.error ?? '')) {
+        logger.warn('conversations.history failed', {
+          userId,
+          channelId: channel.id,
+          error: histData.error,
+        });
+      }
+
+      continue;
+    }
+
+    if (!histData.messages?.length) continue;
 
     const userMsg = histData.messages.find(m => m.user === userId && m.ts);
     if (userMsg?.ts) {
@@ -315,23 +347,42 @@ export async function sendDirectMessage(
 /**
  * Builds the Block Kit message for an inactive guest alert DM.
  *
+ * @param guestId            Slack user ID of the flagged guest.
+ * @param costPerSeatMonthly Monthly seat cost in USD.
+ * @param sponsorId          Slack user ID of the person who invited the guest, if known.
+ *
  * The action_id values here MUST match SLACK_ACTION_ID constants —
  * the same constants used by the action route to identify button clicks.
  */
 export function buildInactiveGuestBlocks(
   guestId: string,
-  costPerSeatMonthly: number
+  costPerSeatMonthly: number,
+  sponsorId?: string | null
 ): SlackBlock[] {
+  const sponsorLine = sponsorId ? `\nOriginally invited by <@${sponsorId}>.` : '';
+
   return [
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
         text:
-          `*Inactive Guest Alert*\n` +
-          `Guest <@${guestId}> appears to be completely inactive.\n` +
+          `*Inactive Guest Detected*\n` +
+          `<@${guestId}> shows no activity in the last 30 days.${sponsorLine}\n` +
           `Estimated cost: *$${costPerSeatMonthly}/month* ($${costPerSeatMonthly * 12}/year).`,
       },
+    },
+    {
+      // Explain what "inactive" means so admins don't file false-positive complaints.
+      // Guests who only read Slack (without messaging or updating their profile)
+      // will appear inactive — this is intentional, but admins should know.
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: '_Activity signals: messages sent, profile updates, and presence. Guests who only read Slack without messaging may appear inactive — use your judgement before acting._',
+        },
+      ],
     },
     {
       type: 'actions',

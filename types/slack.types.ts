@@ -122,11 +122,17 @@ export interface SlackHeaderBlock {
   text: SlackTextObject;
 }
 
+export interface SlackContextBlock {
+  type: 'context';
+  elements: SlackTextObject[];
+}
+
 export type SlackBlock =
   | SlackSectionBlock
   | SlackActionsBlock
   | SlackDividerBlock
-  | SlackHeaderBlock;
+  | SlackHeaderBlock
+  | SlackContextBlock;
 
 // ---------------------------------------------------------------------------
 // Slack Interactive Payload (block_actions)
