@@ -8,7 +8,24 @@
 import Stripe from 'stripe';
 import { env } from '@/lib/env';
 
-export const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-  apiVersion: '2026-01-28.clover',
-  typescript: true,
+let _stripe: Stripe;
+function getStripe() {
+  if (!_stripe) {
+    _stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-01-28.clover',
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
+
+export const stripe = new Proxy({} as Stripe, {
+  get: (_, prop: string | symbol) => {
+    const client = getStripe();
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  },
 });

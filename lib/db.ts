@@ -10,11 +10,27 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '@/lib/env';
 
-export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: {
-    // Server-side: never persist sessions between requests
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
+let _supabase: ReturnType<typeof createClient>;
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return _supabase;
+}
+
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get: (_, prop: string | symbol) => {
+    const client = getSupabase();
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
   },
 });
