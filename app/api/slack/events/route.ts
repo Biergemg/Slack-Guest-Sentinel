@@ -1,54 +1,42 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/db';
+import { verifySlackSignature } from '@/lib/slack';
+import { slackEventService } from '@/services/slack-event.service';
+import { logger } from '@/lib/logger';
+import type { SlackWebhookPayload, SlackUrlVerificationPayload } from '@/types/slack.types';
 
+/**
+ * Slack Event API endpoint.
+ *
+ * All requests are verified with HMAC-SHA256 before any processing.
+ * Slack requires a response within 3 seconds — business logic runs
+ * asynchronously after we acknowledge receipt.
+ */
 export async function POST(request: Request) {
-    try {
-        const body = await request.json();
+  const { valid, body, error } = await verifySlackSignature(request);
 
-        // 1. URL Verification Challenge (Required by Slack Event API)
-        if (body.type === 'url_verification') {
-            return NextResponse.json({ challenge: body.challenge });
-        }
+  if (!valid) {
+    logger.warn('Slack events: invalid signature', { error });
+    return new Response('Unauthorized', { status: 401 });
+  }
 
-        // 2. Event processing
-        if (body.event) {
-            const { type, team_id, user, invited_user } = body.event;
-            const workspaceIdStr = team_id || body.team_id;
+  let payload: SlackWebhookPayload;
+  try {
+    payload = JSON.parse(body) as SlackWebhookPayload;
+  } catch {
+    logger.warn('Slack events: malformed JSON body');
+    return new Response('Bad Request', { status: 400 });
+  }
 
-            if (workspaceIdStr) {
-                const { data: workspace } = await supabase
-                    .from('workspaces')
-                    .select('id')
-                    .eq('slack_workspace_id', workspaceIdStr)
-                    .single();
+  // URL verification challenge — must respond synchronously
+  if (payload.type === 'url_verification') {
+    const { challenge } = payload as SlackUrlVerificationPayload;
+    return NextResponse.json({ challenge });
+  }
 
-                if (workspace) {
-                    // Log event to events table for traceability
-                    await supabase.from('events').insert({
-                        workspace_id: workspace.id,
-                        type: `slack_event_${type}`,
-                        payload: body.event
-                    });
+  // Process asynchronously — respond to Slack immediately
+  slackEventService.handleEnvelope(payload).catch(err => {
+    logger.error('Slack event processing error', {}, err);
+  });
 
-                    // Track sponsors if the event provides the invited user and the inviter
-                    if (type === 'invite_requested' && invited_user && user) {
-                        await supabase.from('guest_sponsors').upsert({
-                            workspace_id: workspace.id,
-                            guest_user_id: invited_user.id || invited_user,
-                            sponsor_user_id: user.id || user,
-                            captured_from_event: type
-                        }, { onConflict: 'workspace_id, guest_user_id' });
-                    }
-                }
-            }
-        }
-
-        // Always acknowledge Slack events quickly
-        return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error("Slack Event Error:", error);
-        // Don't return 500 for normal processing errors so Slack doesn't repeatedly retry unnecessarily
-        // if the payload is just malformed for our specific use case, but 500 for massive crashes
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-    }
+  return NextResponse.json({ ok: true });
 }

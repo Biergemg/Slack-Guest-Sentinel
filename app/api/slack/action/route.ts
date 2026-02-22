@@ -1,67 +1,46 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/db';
+import { verifySlackSignature } from '@/lib/slack';
+import { slackActionService } from '@/services/slack-action.service';
+import { logger } from '@/lib/logger';
+import type { SlackBlockActionsPayload } from '@/types/slack.types';
 
+/**
+ * Slack interactive components endpoint (block_actions).
+ *
+ * All requests are verified with HMAC-SHA256 before processing.
+ * Slack sends form-encoded data with a JSON "payload" field.
+ */
 export async function POST(request: Request) {
-    const formData = await request.formData();
+  const { valid, body, error } = await verifySlackSignature(request);
+
+  if (!valid) {
+    logger.warn('Slack action: invalid signature', { error });
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  let payload: SlackBlockActionsPayload;
+  try {
+    const formData = new URLSearchParams(body);
     const payloadStr = formData.get('payload');
 
-    if (!payloadStr) return new Response('No payload', { status: 400 });
-
-    const payload = JSON.parse(payloadStr as string);
-
-    if (payload.type === 'block_actions') {
-        const action = payload.actions[0];
-        const actionId = action.action_id;
-        const workspaceIdStr = payload.team.id;
-
-        const { data: workspace } = await supabase
-            .from('workspaces')
-            .select('id')
-            .eq('slack_workspace_id', workspaceIdStr)
-            .single();
-
-        if (!workspace) return new Response('Workspace err', { status: 404 });
-
-        if (actionId === 'deactivate_guest_action') {
-            const guestId = action.value.replace('deactivate_', '');
-
-            await supabase.from('guest_audits').update({ action_taken: 'suggested_deactivation_accepted' })
-                .eq('workspace_id', workspace.id)
-                .eq('slack_user_id', guestId);
-
-            await supabase.from('events').insert({
-                workspace_id: workspace.id,
-                type: 'deactivate_button_clicked',
-                payload: { guest_id: guestId, admin: payload.user.id }
-            });
-
-            if (payload.response_url) {
-                await fetch(payload.response_url, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        replace_original: true,
-                        text: `✅ Action logged! You indicated you will manually deactivate <@${guestId}> in the Slack Admin panel.`
-                    })
-                });
-            }
-        } else if (actionId === 'ignore_guest_action') {
-            const guestId = action.value.replace('ignore_', '');
-
-            await supabase.from('guest_audits').update({ action_taken: 'ignored_by_admin' })
-                .eq('workspace_id', workspace.id)
-                .eq('slack_user_id', guestId);
-
-            if (payload.response_url) {
-                await fetch(payload.response_url, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        replace_original: true,
-                        text: `🙈 Ignored alert for <@${guestId}>.`
-                    })
-                });
-            }
-        }
+    if (!payloadStr) {
+      return new Response('Missing payload', { status: 400 });
     }
 
+    payload = JSON.parse(payloadStr) as SlackBlockActionsPayload;
+  } catch {
+    logger.warn('Slack action: malformed payload');
+    return new Response('Bad Request', { status: 400 });
+  }
+
+  if (payload.type !== 'block_actions') {
     return new Response('', { status: 200 });
+  }
+
+  try {
+    await slackActionService.handlePayload(payload);
+  } catch (err) {
+    logger.error('Slack action processing failed', {}, err);
+  }
+
+  return new Response('', { status: 200 });
 }

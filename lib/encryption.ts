@@ -1,22 +1,84 @@
+/**
+ * Token encryption using AES-256-GCM.
+ *
+ * AES-GCM provides authenticated encryption — confidentiality AND integrity.
+ * If a stored ciphertext is tampered with, decryption throws immediately
+ * (auth tag mismatch) rather than silently returning garbled data.
+ * This is superior to AES-CBC which provides confidentiality only.
+ *
+ * Format stored in DB: "<iv_hex>:<authTag_hex>:<ciphertext_hex>"
+ *
+ * MIGRATION NOTE:
+ * Tokens previously encrypted with AES-CBC (2-part "iv:data" format) must
+ * be re-encrypted before deploying. Run scripts/migrate-encryption.ts once.
+ */
+
 import crypto from 'crypto';
+import { env } from '@/lib/env';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-32-character-key-for-dev!'; // Must be 32 characters
-const IV_LENGTH = 16;
+const ALGORITHM = 'aes-256-gcm' as const;
+/** 12-byte IV is the GCM standard — optimal for security and performance */
+const IV_LENGTH = 12;
+const AUTH_TAG_LENGTH = 16;
 
-export function encrypt(text: string): string {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
+function getKey(): Buffer {
+  // env.ts validates at startup that ENCRYPTION_KEY is exactly 32 bytes
+  return Buffer.from(env.ENCRYPTION_KEY, 'utf8');
 }
 
-export function decrypt(text: string): string {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift()!, 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
+/**
+ * Encrypts a plaintext string.
+ * Returns a format-stable string safe to store in the database.
+ */
+export function encrypt(plaintext: string): string {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
+
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
+
+  const authTag = cipher.getAuthTag();
+
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+/**
+ * Decrypts a ciphertext created by `encrypt()`.
+ * Throws if the ciphertext was tampered with or the wrong key is used.
+ */
+export function decrypt(ciphertext: string): string {
+  const parts = ciphertext.split(':');
+
+  if (parts.length !== 3) {
+    throw new Error(
+      `[encryption] Invalid ciphertext format. Expected "iv:authTag:data" (3 parts), got ${parts.length}. ` +
+      `Old AES-CBC tokens (2 parts) must be migrated first — run scripts/migrate-encryption.ts.`
+    );
+  }
+
+  const [ivHex, authTagHex, encryptedHex] = parts as [string, string, string];
+
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  const encrypted = Buffer.from(encryptedHex, 'hex');
+
+  const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
+  decipher.setAuthTag(authTag);
+
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+/**
+ * Returns true if a stored ciphertext uses the old AES-CBC 2-part format.
+ * Used by the migration script to identify tokens that need re-encryption.
+ */
+export function isLegacyCbcFormat(ciphertext: string): boolean {
+  return ciphertext.split(':').length === 2;
 }

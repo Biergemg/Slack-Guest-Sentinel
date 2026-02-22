@@ -1,23 +1,30 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { SESSION } from '@/config/constants';
 
+/**
+ * Protects authenticated routes.
+ *
+ * The workspace_session cookie is set by /api/slack/callback after a
+ * successful OAuth installation. Its value is the workspace UUID.
+ * Without this cookie, dashboard access redirects to the home page.
+ */
 export function middleware(request: NextRequest) {
-    // Simple MVP middleware to protect dashboard paths.
-    // In a robust implementation, this would verify a session token in cookies or headers,
-    // query Supabase natively via SSR helpers, and assert subscription active status.
-    // For this scaffold, we block unauthenticated attempts without a mock auth token.
+  const { pathname } = request.nextUrl;
 
-    const hasAuthToken = request.cookies.has('sb-access-token') || request.cookies.has('workspace_id');
+  if (pathname.startsWith('/dashboard')) {
+    const session = request.cookies.get(SESSION.COOKIE_NAME);
 
-    if (request.nextUrl.pathname.startsWith('/dashboard')) {
-        if (!hasAuthToken && process.env.NODE_ENV === 'production') {
-            // return NextResponse.redirect(new URL('/', request.url));
-        }
+    if (!session?.value) {
+      const redirectUrl = new URL('/', request.url);
+      redirectUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(redirectUrl);
     }
+  }
 
-    return NextResponse.next();
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/dashboard/:path*'],
+  matcher: ['/dashboard/:path*'],
 };

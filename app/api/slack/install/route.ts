@@ -1,25 +1,34 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
+import { env } from '@/lib/env';
+import { CSRF, SLACK_API } from '@/config/constants';
 
-export async function GET(request: Request) {
-    const clientId = process.env.SLACK_CLIENT_ID;
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/slack/callback`;
+/**
+ * Initiates the Slack OAuth flow.
+ *
+ * Sets a cryptographically random `state` cookie for CSRF protection
+ * and redirects the user to Slack's authorization page.
+ */
+export async function GET() {
+  const state = crypto.randomBytes(32).toString('hex');
+  const redirectUri = `${env.APP_URL}/api/slack/callback`;
 
-    // Scopes requested (as per Phase 12 list + core setup)
-    // users:read -> identify guest accounts, read profile activity/timestamps
-    // chat:write -> notify workspace admins about inactive users
-    // im:write -> send direct messages with suggested actions
-    const scopes = [
-        'users:read',
-        'chat:write',
-        'im:write'
-    ].join(',');
+  const slackOAuthUrl = new URL('https://slack.com/oauth/v2/authorize');
+  slackOAuthUrl.searchParams.set('client_id', env.SLACK_CLIENT_ID);
+  slackOAuthUrl.searchParams.set('user_scope', SLACK_API.REQUIRED_USER_SCOPES.join(','));
+  slackOAuthUrl.searchParams.set('redirect_uri', redirectUri);
+  slackOAuthUrl.searchParams.set('state', state);
 
-    const slackOAuthUrl = new URL('https://slack.com/oauth/v2/authorize');
-    slackOAuthUrl.searchParams.append('client_id', clientId || '');
-    slackOAuthUrl.searchParams.append('user_scope', scopes);
-    slackOAuthUrl.searchParams.append('redirect_uri', redirectUri);
+  const response = NextResponse.redirect(slackOAuthUrl.toString());
 
-    // Optionally, state parameter could be added for CSRF protection
+  // Store state in HttpOnly cookie — validated in /api/slack/callback
+  response.cookies.set(CSRF.STATE_COOKIE_NAME, state, {
+    httpOnly: true,
+    secure: env.IS_PRODUCTION,
+    sameSite: 'lax',
+    maxAge: CSRF.STATE_COOKIE_MAX_AGE_SECONDS,
+    path: '/',
+  });
 
-    return NextResponse.redirect(slackOAuthUrl.toString());
+  return response;
 }

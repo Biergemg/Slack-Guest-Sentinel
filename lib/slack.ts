@@ -1,72 +1,290 @@
-const SLACK_API_URL = 'https://slack.com/api';
+/**
+ * Slack API client.
+ *
+ * Provides:
+ *   - slackApiCall(): typed HTTP wrapper with retry and rate-limit handling
+ *   - verifySlackSignature(): HMAC-SHA256 request authentication
+ *   - getGuests(): paginated guest list (no 1000-user hard cap)
+ *   - getUserPresence(): presence check with safe fallback
+ *   - sendDirectMessage(): open IM channel and post Block Kit messages
+ *   - buildInactiveGuestBlocks(): canonical DM alert block builder
+ */
 
-async function delay(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+import crypto from 'crypto';
+import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
+import { SLACK_API, AUDIT, SLACK_ACTION_ID } from '@/config/constants';
+import type {
+  SlackUser,
+  SlackBlock,
+  UsersListResponse,
+  UserPresenceResponse,
+  ConversationsOpenResponse,
+  ChatPostMessageResponse,
+  SlackBaseResponse,
+} from '@/types/slack.types';
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function slackApiCall(endpoint: string, token: string, body?: any, retries = 3): Promise<any> {
-    const url = endpoint.startsWith('http') ? endpoint : `${SLACK_API_URL}/${endpoint}`;
-    const options: any = {
-        method: body ? 'POST' : 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        }
-    };
-    if (body) {
-        options.body = JSON.stringify(body);
+// ---------------------------------------------------------------------------
+// Core API caller
+// ---------------------------------------------------------------------------
+
+interface SlackApiCallOptions {
+  endpoint: string;
+  token: string;
+  body?: Record<string, unknown>;
+  retries?: number;
+}
+
+async function slackApiCall<T extends SlackBaseResponse>(
+  options: SlackApiCallOptions
+): Promise<T> {
+  const { endpoint, token, body, retries = SLACK_API.MAX_RETRIES } = options;
+
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : `${SLACK_API.BASE_URL}/${endpoint}`;
+
+  const fetchOptions: RequestInit = {
+    method: body !== undefined ? 'POST' : 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  };
+
+  try {
+    const res = await fetch(url, fetchOptions);
+
+    if (res.status === 429 && retries > 0) {
+      const retryAfter = res.headers.get('Retry-After');
+      const waitMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : SLACK_API.RATE_LIMIT_DEFAULT_WAIT_MS;
+
+      logger.warn('Slack rate limit hit', { endpoint, waitMs, retriesLeft: retries });
+      await delay(waitMs);
+      return slackApiCall<T>({ ...options, retries: retries - 1 });
     }
 
-    try {
-        const res = await fetch(url, options);
-
-        if (res.status === 429 && retries > 0) {
-            const retryAfter = res.headers.get('Retry-After');
-            // Default to 10 seconds if header is missing during rate limit
-            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 10000;
-            console.warn(`Rate limited by Slack. Waiting ${waitTime}ms before retry...`);
-            await delay(waitTime);
-            return slackApiCall(endpoint, token, body, retries - 1);
-        }
-
-        const data = await res.json();
-        return data;
-    } catch (error) {
-        if (retries > 0) {
-            console.warn(`Network error making Slack API call. Retrying...`, error);
-            await delay(2000);
-            return slackApiCall(endpoint, token, body, retries - 1);
-        }
-        throw error;
+    const data = (await res.json()) as T;
+    return data;
+  } catch (err) {
+    if (retries > 0) {
+      logger.warn('Slack API network error, retrying', { endpoint, retriesLeft: retries }, err);
+      await delay(SLACK_API.RETRY_DELAY_MS);
+      return slackApiCall<T>({ ...options, retries: retries - 1 });
     }
+    throw err;
+  }
 }
 
-export async function getGuests(token: string) {
-    const data = await slackApiCall('users.list?limit=1000', token);
-    if (!data.ok) throw new Error(data.error);
-    const members = data.members || [];
-    // is_restricted = multi-channel guest, is_ultra_restricted = single-channel guest
-    return members.filter((m: any) => !m.deleted && (m.is_restricted || m.is_ultra_restricted) && !m.is_bot);
+// ---------------------------------------------------------------------------
+// Slack request signature verification (HMAC-SHA256)
+// ---------------------------------------------------------------------------
+
+export interface SignatureVerificationResult {
+  valid: boolean;
+  /** Raw request body needed to parse the payload after verification */
+  body: string;
+  error?: string;
 }
 
-export async function getUserPresence(token: string, userId: string): Promise<string> {
-    const data = await slackApiCall(`users.getPresence?user=${userId}`, token);
-    if (!data.ok) return 'away';
-    return data.presence;
+/**
+ * Verifies the authenticity of an incoming Slack request.
+ *
+ * Slack signs every request with HMAC-SHA256. Verifying this signature
+ * prevents forged events and replay attacks. Call this BEFORE processing
+ * any data from /api/slack/events or /api/slack/action.
+ *
+ * @see https://api.slack.com/authentication/verifying-requests-from-slack
+ */
+export async function verifySlackSignature(
+  request: Request
+): Promise<SignatureVerificationResult> {
+  const timestamp = request.headers.get('x-slack-request-timestamp');
+  const signature = request.headers.get('x-slack-signature');
+
+  if (!timestamp || !signature) {
+    return { valid: false, body: '', error: 'Missing Slack signature headers' };
+  }
+
+  // Reject requests older than 5 minutes to prevent replay attacks
+  const ageSeconds = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+  if (ageSeconds > SLACK_API.SIGNATURE_MAX_AGE_SECONDS) {
+    return { valid: false, body: '', error: `Request timestamp too old (${ageSeconds}s)` };
+  }
+
+  const body = await request.text();
+  const sigBase = `v0:${timestamp}:${body}`;
+  const hmac = crypto.createHmac('sha256', env.SLACK_SIGNING_SECRET);
+  const expected = `v0=${hmac.update(sigBase).digest('hex')}`;
+
+  // Constant-time comparison prevents timing attacks
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  const receivedBuf = Buffer.from(signature, 'utf8');
+
+  if (expectedBuf.length !== receivedBuf.length) {
+    return { valid: false, body, error: 'Signature length mismatch' };
+  }
+
+  const isValid = crypto.timingSafeEqual(expectedBuf, receivedBuf);
+  return {
+    valid: isValid,
+    body,
+    error: isValid ? undefined : 'Signature mismatch',
+  };
 }
 
-export async function sendDirectMessage(token: string, userId: string, blocks: any, fallbackText: string = "Alert") {
-    // 1. Open an IM channel if one doesn't exist
-    const imData = await slackApiCall('conversations.open', token, { users: userId });
-    if (!imData.ok) {
-        throw new Error(imData.error);
-    }
-    const channelId = imData.channel.id;
+// ---------------------------------------------------------------------------
+// Guest list with full pagination
+// ---------------------------------------------------------------------------
 
-    // 2. Send message
-    return await slackApiCall('chat.postMessage', token, {
-        channel: channelId,
-        blocks: blocks,
-        text: fallbackText
+/**
+ * Returns all guest users in the workspace.
+ * Handles pagination automatically — no hard cap on workspace size.
+ */
+export async function getGuests(token: string): Promise<SlackUser[]> {
+  const guests: SlackUser[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      limit: String(AUDIT.GUEST_LIST_PAGE_SIZE),
     });
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
+
+    const data = await slackApiCall<UsersListResponse>({
+      endpoint: `users.list?${params.toString()}`,
+      token,
+    });
+
+    if (!data.ok) {
+      throw new Error(`Slack users.list failed: ${data.error ?? 'unknown error'}`);
+    }
+
+    const pageGuests = (data.members ?? []).filter(
+      m => !m.deleted && (m.is_restricted || m.is_ultra_restricted) && !m.is_bot
+    );
+    guests.push(...pageGuests);
+
+    cursor = data.response_metadata?.next_cursor || undefined;
+  } while (cursor);
+
+  return guests;
+}
+
+// ---------------------------------------------------------------------------
+// User presence
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the current presence of a Slack user.
+ * Returns 'away' on API failure — presence is best-effort, not critical.
+ */
+export async function getUserPresence(
+  token: string,
+  userId: string
+): Promise<'active' | 'away'> {
+  const params = new URLSearchParams({ user: userId });
+  const data = await slackApiCall<UserPresenceResponse>({
+    endpoint: `users.getPresence?${params.toString()}`,
+    token,
+  });
+
+  if (!data.ok) {
+    logger.warn('users.getPresence failed, defaulting to away', { userId, error: data.error });
+    return 'away';
+  }
+
+  return data.presence;
+}
+
+// ---------------------------------------------------------------------------
+// Direct messages
+// ---------------------------------------------------------------------------
+
+/**
+ * Opens a DM channel with a user and posts a Block Kit message.
+ * Throws if the IM channel cannot be opened.
+ */
+export async function sendDirectMessage(
+  token: string,
+  userId: string,
+  blocks: SlackBlock[],
+  fallbackText = 'Alert'
+): Promise<ChatPostMessageResponse> {
+  const imData = await slackApiCall<ConversationsOpenResponse>({
+    endpoint: 'conversations.open',
+    token,
+    body: { users: userId },
+  });
+
+  if (!imData.ok) {
+    throw new Error(`conversations.open failed for user ${userId}: ${imData.error}`);
+  }
+
+  const channelId = imData.channel.id;
+
+  return slackApiCall<ChatPostMessageResponse>({
+    endpoint: 'chat.postMessage',
+    token,
+    body: { channel: channelId, blocks, text: fallbackText },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Block builders (single source of truth for message shapes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the Block Kit message for an inactive guest alert DM.
+ *
+ * The action_id values here MUST match SLACK_ACTION_ID constants —
+ * the same constants used by the action route to identify button clicks.
+ */
+export function buildInactiveGuestBlocks(
+  guestId: string,
+  costPerSeatMonthly: number
+): SlackBlock[] {
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text:
+          `*Inactive Guest Alert*\n` +
+          `Guest <@${guestId}> appears to be completely inactive.\n` +
+          `Estimated cost: *$${costPerSeatMonthly}/month* ($${costPerSeatMonthly * 12}/year).`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Log Deactivation Intent' },
+          style: 'danger',
+          value: `deactivate_${guestId}`,
+          action_id: SLACK_ACTION_ID.DEACTIVATE_GUEST,
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Ignore' },
+          value: `ignore_${guestId}`,
+          action_id: SLACK_ACTION_ID.IGNORE_GUEST,
+        },
+      ],
+    },
+  ];
 }

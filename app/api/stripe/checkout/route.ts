@@ -1,58 +1,42 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
 import { supabase } from '@/lib/db';
+import { subscriptionService } from '@/services/subscription.service';
+import { logger } from '@/lib/logger';
 
+/**
+ * Creates a Stripe Checkout session and redirects the user to it.
+ *
+ * Expects form data with a workspaceId field.
+ * The workspaceId is set during Slack OAuth and stored in the session cookie.
+ */
 export async function POST(request: Request) {
-    try {
-        const formData = await request.formData();
-        const workspaceId = formData.get('workspaceId');
+  try {
+    const formData = await request.formData();
+    const workspaceId = formData.get('workspaceId');
 
-        if (!workspaceId) {
-            return NextResponse.redirect(new URL('/?error=missing_workspace', request.url));
-        }
-
-        // Verify workspace exists
-        const { data: workspace } = await supabase
-            .from('workspaces')
-            .select('id, team_name, slack_workspace_id')
-            .eq('id', workspaceId)
-            .single();
-
-        if (!workspace) {
-            return NextResponse.redirect(new URL('/?error=invalid_workspace', request.url));
-        }
-
-        // Create Checkout Session
-        // MVP uses a placeholder or env variable for Price ID
-        const priceId = process.env.STRIPE_PRICE_ID;
-
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [
-                {
-                    price: priceId || 'price_placeholder', // Ensure you create a recurrring price in Stripe Dashboard
-                    quantity: 1,
-                },
-            ],
-            mode: 'subscription',
-            subscription_data: {
-                trial_period_days: 7, // 7 days free trial
-                metadata: {
-                    workspaceId: workspace.id
-                }
-            },
-            client_reference_id: workspace.id,
-            success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/onboarding?workspaceId=${workspace.id}`,
-        });
-
-        if (session.url) {
-            return NextResponse.redirect(session.url, 303);
-        }
-
-        return NextResponse.redirect(new URL('/?error=stripe_error', request.url));
-    } catch (error) {
-        console.error("Stripe Checkout Error:", error);
-        return NextResponse.redirect(new URL('/?error=internal_error', request.url));
+    if (!workspaceId || typeof workspaceId !== 'string') {
+      return NextResponse.redirect(new URL('/?error=missing_workspace', request.url));
     }
+
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id, team_name')
+      .eq('id', workspaceId)
+      .single();
+
+    if (!workspace) {
+      logger.warn('Checkout attempted for unknown workspace', { workspaceId });
+      return NextResponse.redirect(new URL('/?error=invalid_workspace', request.url));
+    }
+
+    const checkoutUrl = await subscriptionService.createCheckoutSession(
+      workspace.id,
+      workspace.team_name
+    );
+
+    return NextResponse.redirect(checkoutUrl, 303);
+  } catch (err) {
+    logger.error('Stripe checkout error', {}, err);
+    return NextResponse.redirect(new URL('/?error=internal_error', request.url));
+  }
 }
