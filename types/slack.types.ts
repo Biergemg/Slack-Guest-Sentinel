@@ -191,6 +191,43 @@ export type SlackWebhookPayload =
   | SlackEventCallbackEnvelope;
 
 // ---------------------------------------------------------------------------
+// users.conversations
+// Requires scopes: channels:read (public), groups:read (private)
+// ---------------------------------------------------------------------------
+
+export interface SlackChannel {
+  id: string;
+  name?: string;
+}
+
+export interface UserConversationsResponse extends SlackBaseResponse {
+  channels: SlackChannel[];
+  response_metadata?: {
+    next_cursor: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// conversations.history
+// Requires scopes: channels:history (public), groups:history (private)
+// ---------------------------------------------------------------------------
+
+export interface SlackMessage {
+  type: string;
+  /** Slack user ID of the author. Absent for bots. */
+  user?: string;
+  bot_id?: string;
+  text?: string;
+  /** Unix timestamp as a decimal string, e.g. "1700000000.123456" */
+  ts?: string;
+}
+
+export interface ConversationsHistoryResponse extends SlackBaseResponse {
+  messages?: SlackMessage[];
+  has_more?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // OAuth
 // ---------------------------------------------------------------------------
 

@@ -14,7 +14,13 @@
 
 import { supabase } from '@/lib/db';
 import { decrypt } from '@/lib/encryption';
-import { getGuests, getUserPresence, sendDirectMessage, buildInactiveGuestBlocks } from '@/lib/slack';
+import {
+  getGuests,
+  getLastMessageTs,
+  getUserPresence,
+  sendDirectMessage,
+  buildInactiveGuestBlocks,
+} from '@/lib/slack';
 import { logger } from '@/lib/logger';
 import {
   AUDIT,
@@ -29,6 +35,21 @@ import type { AuditRunResult } from '@/types/api.types';
 interface ScoredGuest {
   guest: SlackUser;
   score: number;
+  /** Which signals were checked — recorded in guest_audits.last_seen_source */
+  source: string;
+}
+
+/** Run an array of async tasks with bounded concurrency. */
+async function withConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < tasks.length; i += limit) {
+    const batch = tasks.slice(i, i + limit).map(fn => fn());
+    results.push(...(await Promise.all(batch)));
+  }
+  return results;
 }
 
 export class AuditService {
@@ -102,31 +123,26 @@ export class AuditService {
       // Score all guests concurrently
       const scoredGuests = await this.scoreGuests(token, guests);
 
-      const inactiveGuests = scoredGuests
-        .filter(sg => sg.score <= AUDIT.INACTIVE_SCORE_THRESHOLD)
-        .map(sg => sg.guest);
-
-      const activeGuests = scoredGuests
-        .filter(sg => sg.score > AUDIT.INACTIVE_SCORE_THRESHOLD)
-        .map(sg => sg.guest);
+      const inactiveGuests = scoredGuests.filter(sg => sg.score < AUDIT.MIN_ACTIVE_SCORE);
+      const activeGuests = scoredGuests.filter(sg => sg.score >= AUDIT.MIN_ACTIVE_SCORE);
 
       // Batch DB operations
       await Promise.all([
         this.flagGuests(workspace.id, inactiveGuests, costPerSeat),
-        this.clearActiveGuests(workspace.id, activeGuests.map(g => g.id)),
+        this.clearActiveGuests(workspace.id, activeGuests.map(sg => sg.guest.id)),
       ]);
 
       // Send DM alerts in parallel (failures are caught per alert)
       await Promise.allSettled(
-        inactiveGuests.map(guest =>
-          this.sendInactiveAlert(token, workspace, guest.id, costPerSeat)
+        inactiveGuests.map(sg =>
+          this.sendInactiveAlert(token, workspace, sg.guest.id, costPerSeat)
         )
       );
 
       // Record audit snapshot
       const runData: AuditRunInsert = {
         workspace_id: workspace.id,
-        workspace_guest_count: guests.length,
+        workspace_guest_count: scoredGuests.length,
         workspace_inactive_count: inactiveGuests.length,
         workspace_estimated_waste: inactiveGuests.length * costPerSeat,
       };
@@ -150,43 +166,74 @@ export class AuditService {
     }
   }
 
+  /**
+   * Scores each guest for inactivity using a 3-signal lazy evaluation strategy.
+   *
+   * Signals (in order of cost, cheapest first):
+   *   1. Profile update  (+1.0) — free, already in users.list response
+   *   2. Presence active (+0.5) — cheap, 1 API call per guest
+   *   3. Last message    (+3.0) — expensive, 1-3 API calls per guest; last resort
+   *
+   * Short-circuits as soon as score >= MIN_ACTIVE_SCORE to avoid unnecessary
+   * API calls. Processes guests in batches of GUEST_SCORING_CONCURRENCY to
+   * prevent request floods on large workspaces.
+   */
   private async scoreGuests(token: string, guests: SlackUser[]): Promise<ScoredGuest[]> {
-    const now = Math.floor(Date.now() / 1000);
-    const cutoff = now - AUDIT.ACTIVITY_WINDOW_SECONDS;
+    const cutoff = Math.floor(Date.now() / 1000) - AUDIT.ACTIVITY_WINDOW_SECONDS;
 
-    return Promise.all(
-      guests.map(async (guest): Promise<ScoredGuest> => {
-        let score = 0;
+    const tasks = guests.map(guest => async (): Promise<ScoredGuest> => {
+      let score = 0;
 
-        // Signal 1: Recent profile update
-        if (guest.updated && guest.updated > cutoff) {
-          score += AUDIT.PROFILE_ACTIVITY_SCORE;
-        }
+      // ── Signal 1: Profile update (FREE — already in users.list) ──────────
+      if (guest.updated && guest.updated > cutoff) {
+        score += AUDIT.SCORE_PROFILE_UPDATED;
+      }
 
-        // Signal 2: Current presence — only checked if score is still 0 (saves API calls)
-        if (score === 0) {
-          const presence = await getUserPresence(token, guest.id);
-          if (presence === 'active') {
-            score += AUDIT.PRESENCE_ACTIVITY_SCORE;
-          }
-        }
+      // Short-circuit: profile alone crosses the threshold
+      if (score >= AUDIT.MIN_ACTIVE_SCORE) {
+        return { guest, score, source: 'profile_check' };
+      }
 
-        return { guest, score };
-      })
-    );
+      // ── Signal 2: Current presence (CHEAP — 1 API call) ──────────────────
+      // Presence is unreliable alone (Slack keepalive, mobile background,
+      // bots) — it only contributes 0.5, so it cannot classify a guest as
+      // active by itself. Presence + profile is the only combo that reaches
+      // the threshold without a message check.
+      const presence = await getUserPresence(token, guest.id);
+      if (presence === 'active') {
+        score += AUDIT.SCORE_PRESENCE_ACTIVE;
+      }
+
+      if (score >= AUDIT.MIN_ACTIVE_SCORE) {
+        return { guest, score, source: 'profile_presence_check' };
+      }
+
+      // ── Signal 3: Last message timestamp (EXPENSIVE — last resort) ────────
+      // Only reached for guests who haven't updated their profile AND aren't
+      // presence-active above the threshold. This is the most reliable signal
+      // but requires extra scopes (channels:read, channels:history).
+      const lastMsgTs = await getLastMessageTs(token, guest.id);
+      if (lastMsgTs !== null && lastMsgTs > cutoff) {
+        score += AUDIT.SCORE_LAST_MESSAGE;
+      }
+
+      return { guest, score, source: 'profile_presence_message_check' };
+    });
+
+    return withConcurrency(tasks, AUDIT.GUEST_SCORING_CONCURRENCY);
   }
 
   private async flagGuests(
     workspaceId: string,
-    guests: SlackUser[],
+    guests: ScoredGuest[],
     costPerSeat: number
   ): Promise<void> {
     if (guests.length === 0) return;
 
-    const records: GuestAuditUpsert[] = guests.map(guest => ({
+    const records: GuestAuditUpsert[] = guests.map(sg => ({
       workspace_id: workspaceId,
-      slack_user_id: guest.id,
-      last_seen_source: 'profile_and_presence_check',
+      slack_user_id: sg.guest.id,
+      last_seen_source: sg.source,
       estimated_cost_monthly: costPerSeat,
       estimated_cost_yearly: costPerSeat * 12,
       is_flagged: true,

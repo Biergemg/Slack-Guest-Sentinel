@@ -21,19 +21,43 @@ export const BILLING = {
 // Audit / Inactivity Detection
 // ---------------------------------------------------------------------------
 export const AUDIT = {
-  /** Number of days in the activity lookback window */
+  /** Inactivity lookback window */
   ACTIVITY_WINDOW_DAYS: 30,
-  /** Same window expressed in seconds (for Slack's Unix timestamp comparisons) */
+  /** Same window in seconds — used for Unix timestamp comparisons */
   ACTIVITY_WINDOW_SECONDS: 30 * 24 * 60 * 60,
-  /** Slack API users.list page size */
+  /** Slack API page size for users.list */
   GUEST_LIST_PAGE_SIZE: 200,
-  /** Points added when user presence is 'active' */
-  PRESENCE_ACTIVITY_SCORE: 2,
-  /** Points added when profile was updated within the activity window */
-  PROFILE_ACTIVITY_SCORE: 1,
-  /** Score at or below which a guest is considered inactive */
-  INACTIVE_SCORE_THRESHOLD: 0,
-  /** Max workspaces to audit in parallel (avoids DB connection exhaustion) */
+
+  /**
+   * Scoring weights (higher = stronger signal of activity).
+   *
+   * message  > profile > presence in reliability:
+   *   - presence can be Slack keepalive, mobile background, or bot activity
+   *   - profile update requires deliberate user action
+   *   - a real message is the strongest proof of engagement
+   */
+  SCORE_LAST_MESSAGE: 3,      // Sent a message within the window — definitive
+  SCORE_PROFILE_UPDATED: 1,   // Profile updated within the window — intentional action
+  SCORE_PRESENCE_ACTIVE: 0.5, // Currently presence-active — weak (keepalive/mobile)
+
+  /**
+   * Classification threshold.
+   * score >= MIN_ACTIVE_SCORE → active (cleared from audit)
+   * score <  MIN_ACTIVE_SCORE → inactive (flagged for review)
+   *
+   * At 1.0: presence alone (0.5) does NOT save a guest — they need either a
+   * real message or a profile update to avoid being flagged.
+   */
+  MIN_ACTIVE_SCORE: 1,
+
+  /** Max channels to check per guest when fetching conversation history */
+  HISTORY_CHANNELS_TO_CHECK: 3,
+  /** Messages to fetch per channel (oldest-first via `oldest` param limits scope) */
+  HISTORY_MESSAGES_LIMIT: 50,
+
+  /** Max guests to score concurrently — prevents simultaneous API call explosion */
+  GUEST_SCORING_CONCURRENCY: 10,
+  /** Max workspaces to audit in parallel — avoids DB connection exhaustion */
   WORKSPACE_BATCH_SIZE: 5,
 } as const;
 

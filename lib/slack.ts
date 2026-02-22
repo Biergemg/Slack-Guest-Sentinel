@@ -17,8 +17,11 @@ import { SLACK_API, AUDIT, SLACK_ACTION_ID } from '@/config/constants';
 import type {
   SlackUser,
   SlackBlock,
+  SlackChannel,
   UsersListResponse,
   UserPresenceResponse,
+  UserConversationsResponse,
+  ConversationsHistoryResponse,
   ConversationsOpenResponse,
   ChatPostMessageResponse,
   SlackBaseResponse,
@@ -208,6 +211,68 @@ export async function getUserPresence(
   }
 
   return data.presence;
+}
+
+// ---------------------------------------------------------------------------
+// Last message timestamp (last resort — requires channels:read + channels:history)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the Unix timestamp (seconds) of the guest's most recent message
+ * within the activity window, or null if none found.
+ *
+ * Call this ONLY after profile and presence checks have failed to classify
+ * the guest — it issues multiple API calls and can trigger rate limiting.
+ *
+ * Requires OAuth scopes: channels:read, channels:history
+ */
+export async function getLastMessageTs(
+  token: string,
+  userId: string
+): Promise<number | null> {
+  const cutoff = Math.floor(Date.now() / 1000) - AUDIT.ACTIVITY_WINDOW_SECONDS;
+
+  // Step 1: Get the public channels this guest is in
+  const params = new URLSearchParams({
+    user: userId,
+    types: 'public_channel',
+    exclude_archived: 'true',
+    limit: String(AUDIT.HISTORY_CHANNELS_TO_CHECK),
+  });
+
+  const channelsData = await slackApiCall<UserConversationsResponse>({
+    endpoint: `users.conversations?${params.toString()}`,
+    token,
+  });
+
+  if (!channelsData.ok || !channelsData.channels?.length) {
+    logger.warn('users.conversations returned no channels', { userId, error: channelsData.error });
+    return null;
+  }
+
+  // Step 2: Scan history in each channel for a recent message from this user.
+  // Stop as soon as we find one — no need to exhaust all channels.
+  for (const channel of channelsData.channels as SlackChannel[]) {
+    const histParams = new URLSearchParams({
+      channel: channel.id,
+      oldest: String(cutoff),
+      limit: String(AUDIT.HISTORY_MESSAGES_LIMIT),
+    });
+
+    const histData = await slackApiCall<ConversationsHistoryResponse>({
+      endpoint: `conversations.history?${histParams.toString()}`,
+      token,
+    });
+
+    if (!histData.ok || !histData.messages?.length) continue;
+
+    const userMsg = histData.messages.find(m => m.user === userId && m.ts);
+    if (userMsg?.ts) {
+      return parseFloat(userMsg.ts); // Found — stop searching
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
