@@ -62,9 +62,10 @@ export default async function Dashboard({
           <Image
             src="/logo.png"
             alt="Slack Guest Sentinel Logo"
-            width={60}
-            height={60}
-            className="w-12 h-12 rounded-lg shadow-sm"
+            width={120}
+            height={48}
+            priority
+            className="w-auto h-12 object-contain drop-shadow-sm"
           />
           <h1 className="text-3xl font-bold text-gray-800 dark:text-white">
             Workspace Dashboard
