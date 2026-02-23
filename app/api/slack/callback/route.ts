@@ -4,7 +4,7 @@ import { supabase } from '@/lib/db';
 import { encrypt } from '@/lib/encryption';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { BILLING, CSRF, SESSION, WORKSPACE_PLAN } from '@/config/constants';
+import { BILLING, CSRF, SESSION } from '@/config/constants';
 import type { SlackOAuthV2Response } from '@/types/slack.types';
 import type { WorkspaceInsert } from '@/types/database.types';
 
@@ -89,8 +89,6 @@ export async function GET(request: Request) {
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
       : null;
 
-    const planType = enterprise ? WORKSPACE_PLAN.ENTERPRISE : WORKSPACE_PLAN.STANDARD;
-
     const workspaceData: WorkspaceInsert = {
       slack_workspace_id: team.id,
       team_name: team.name,
@@ -100,7 +98,7 @@ export async function GET(request: Request) {
       refresh_token: encryptedRefreshToken,
       token_expires_at: tokenExpiresAt,
       installed_by: authed_user.id,
-      plan_type: planType,
+      plan_type: 'free',
       supports_user_deactivation: !!enterprise,
       estimated_seat_cost: BILLING.DEFAULT_SEAT_COST_USD,
     };
