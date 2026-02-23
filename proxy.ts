@@ -9,7 +9,7 @@ import { SESSION } from '@/config/constants';
  * successful OAuth installation. Its value is the workspace UUID.
  * Without this cookie, dashboard access redirects to the home page.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/dashboard')) {

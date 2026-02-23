@@ -15,6 +15,10 @@ const initStripe = () => {
       typescript: true,
     });
   } catch (err) {
+    if (env.IS_PRODUCTION) {
+      throw err;
+    }
+
     // If env vars are missing during `next build` static generation checks,
     // return a dummy client so the build doesn't crash.
     // Protected by `export const dynamic = 'force-dynamic'` in routes.

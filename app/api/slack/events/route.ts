@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/slack';
 import { slackEventService } from '@/services/slack-event.service';
 import { logger } from '@/lib/logger';
@@ -34,9 +34,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ challenge });
   }
 
-  // Process asynchronously — respond to Slack immediately
-  slackEventService.handleEnvelope(payload).catch(err => {
-    logger.error('Slack event processing error', {}, err);
+  // Process asynchronously — keep it attached to the request lifecycle
+  after(() => {
+    return slackEventService.handleEnvelope(payload).catch(err => {
+      logger.error('Slack event processing error', {}, err);
+    });
   });
 
   return NextResponse.json({ ok: true });

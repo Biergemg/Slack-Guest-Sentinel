@@ -9,10 +9,11 @@ import { logger } from '@/lib/logger';
  *
  * Triggered by Vercel Cron (see vercel.json) at 00:00 UTC daily.
  * Protected by Bearer token authentication.
+ * Supports GET (Vercel Cron default) and POST (manual/internal calls).
  *
  * All business logic lives in AuditService. This handler is a thin controller.
  */
-export async function POST(request: Request) {
+async function runAudit(request: Request) {
   const authHeader = request.headers.get('Authorization');
 
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
@@ -27,4 +28,12 @@ export async function POST(request: Request) {
     logger.error('Audit cron: unexpected failure', {}, err);
     return new Response('Internal Server Error', { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return runAudit(request);
+}
+
+export async function POST(request: Request) {
+  return runAudit(request);
 }

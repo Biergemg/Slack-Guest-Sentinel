@@ -1,23 +1,40 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { supabase } from '@/lib/db';
 import { subscriptionService } from '@/services/subscription.service';
 import { logger } from '@/lib/logger';
+import { SESSION } from '@/config/constants';
 
 /**
  * Creates a Stripe Checkout session and redirects the user to it.
  *
- * Expects form data with a workspaceId field.
- * The workspaceId is set during Slack OAuth and stored in the session cookie.
+ * Security:
+ * - Requires a valid workspace_session cookie
+ * - Ignores/treats as untrusted any workspaceId sent from the client
  */
 export async function POST(request: Request) {
   try {
+    const cookieStore = await cookies();
+    const sessionWorkspaceId = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+
+    if (!sessionWorkspaceId) {
+      return NextResponse.redirect(new URL('/?error=unauthorized', request.url));
+    }
+
     const formData = await request.formData();
-    const workspaceId = formData.get('workspaceId');
+    const workspaceIdFromForm = formData.get('workspaceId');
     const plan = formData.get('plan');
 
-    if (!workspaceId || typeof workspaceId !== 'string') {
-      return NextResponse.redirect(new URL('/?error=missing_workspace', request.url));
+    if (
+      workspaceIdFromForm &&
+      (typeof workspaceIdFromForm !== 'string' || workspaceIdFromForm !== sessionWorkspaceId)
+    ) {
+      logger.warn('Checkout workspace mismatch between form and session', {
+        sessionWorkspaceId,
+        workspaceIdFromForm,
+      });
+      return NextResponse.redirect(new URL('/?error=unauthorized', request.url));
     }
 
     if (!plan || typeof plan !== 'string' || !['starter', 'growth', 'scale'].includes(plan)) {
@@ -27,11 +44,11 @@ export async function POST(request: Request) {
     const { data: workspace } = await supabase
       .from('workspaces')
       .select('id, team_name')
-      .eq('id', workspaceId)
+      .eq('id', sessionWorkspaceId)
       .single();
 
     if (!workspace) {
-      logger.warn('Checkout attempted for unknown workspace', { workspaceId });
+      logger.warn('Checkout attempted for unknown workspace', { workspaceId: sessionWorkspaceId });
       return NextResponse.redirect(new URL('/?error=invalid_workspace', request.url));
     }
 
@@ -42,9 +59,11 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.redirect(checkoutUrl, 303);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Stripe checkout error', {}, err);
-    const diagCode = encodeURIComponent((err.message || String(err)).slice(0, 100));
+    const diagCode = encodeURIComponent(
+      (err instanceof Error ? err.message : String(err)).slice(0, 100)
+    );
     return NextResponse.redirect(new URL(`/?error=internal_error&detail=${diagCode}`, request.url));
   }
 }

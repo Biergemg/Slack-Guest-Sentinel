@@ -58,9 +58,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Slack API error', code: data.error }, { status: 502 });
     }
 
-    const members: Array<{ deleted?: boolean; is_restricted?: boolean; is_ultra_restricted?: boolean }> =
+    const members: Array<{ deleted?: boolean; is_restricted?: boolean; is_ultra_restricted?: boolean; is_bot?: boolean }> =
       data.members ?? [];
-    const guests = members.filter(m => !m.deleted && (m.is_restricted || m.is_ultra_restricted));
+    const guests = members.filter(
+      m => !m.deleted && !m.is_bot && (m.is_restricted || m.is_ultra_restricted)
+    );
     const guestCount = guests.length;
 
     // Estimate inactivity at 20% — avoids scoring API calls during onboarding.

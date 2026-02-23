@@ -6,7 +6,6 @@
  */
 
 import { stripe } from '@/lib/stripe';
-import { supabase } from '@/lib/db';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { BILLING } from '@/config/constants';

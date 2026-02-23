@@ -18,6 +18,19 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // Strict referrer policy
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Baseline CSP hardening without breaking Next.js runtime
+          {
+            key: 'Content-Security-Policy',
+            value:
+              "default-src 'self'; " +
+              "img-src 'self' data: https:; " +
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+              "style-src 'self' 'unsafe-inline'; " +
+              "connect-src 'self' https://*.supabase.co https://api.stripe.com https://slack.com; " +
+              "frame-ancestors 'none'; " +
+              "base-uri 'self'; " +
+              "form-action 'self';",
+          },
           // Disable access to sensors and device features
           {
             key: 'Permissions-Policy',

@@ -6,9 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "validate": "tsc --noEmit && next lint"
+    "validate": "tsc --noEmit && npm run lint"
   },
   "keywords": [],
   "author": "",

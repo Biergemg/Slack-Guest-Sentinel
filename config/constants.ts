@@ -122,7 +122,7 @@ export const SLACK_API = {
   /** Maximum number of retries for Slack API calls */
   MAX_RETRIES: 3,
   /** Slack OAuth required user scopes */
-  REQUIRED_USER_SCOPES: ['users:read', 'chat:write', 'im:write'],
+  REQUIRED_USER_SCOPES: ['users:read', 'chat:write', 'im:write', 'channels:read', 'channels:history'],
   /** Maximum age (seconds) for Slack request signatures (prevents replay attacks) */
   SIGNATURE_MAX_AGE_SECONDS: 300,
 } as const;

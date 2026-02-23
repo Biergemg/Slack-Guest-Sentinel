@@ -37,9 +37,11 @@ export async function POST(request: Request) {
     const returnUrl = `${new URL(request.url).origin}/dashboard`;
     const portalUrl = await subscriptionService.createPortalSession(customerId, returnUrl);
     return NextResponse.redirect(portalUrl, 303);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Stripe portal session error', { workspaceId }, err);
-    const diagCode = encodeURIComponent((err.message || String(err)).slice(0, 100));
+    const diagCode = encodeURIComponent(
+      (err instanceof Error ? err.message : String(err)).slice(0, 100)
+    );
     return NextResponse.redirect(
       new URL(`/dashboard?error=portal_error&detail=${diagCode}`, request.url)
     );

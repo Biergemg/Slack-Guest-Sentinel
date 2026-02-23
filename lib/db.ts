@@ -20,7 +20,7 @@ const initSupabase = () => {
         detectSessionInUrl: false,
       },
     });
-  } catch (err) {
+  } catch {
     // If env vars are missing during `next build` static generation checks,
     // return a dummy client so the build doesn't crash.
     // Protected by `export const dynamic = 'force-dynamic'` in routes.

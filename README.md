@@ -93,7 +93,7 @@ slack-guest-sentinel/
 │   └── api.types.ts                      # Route request/response types
 │
 ├── supabase/migrations/                  # Database schema
-├── middleware.ts                         # Protects /dashboard with session cookie
+├── proxy.ts                              # Protects /dashboard with session cookie
 ├── slack_manifest.json                   # Slack app manifest
 └── vercel.json                           # Cron job schedule
 ```
@@ -144,9 +144,12 @@ Required OAuth scopes (user token):
 - `users:read` — fetch guest list
 - `chat:write` — send DM alerts
 - `im:write` — open DM channels
+- `channels:read` — inspect guest channel memberships for activity checks
+- `channels:history` — verify recent guest message activity
 
 Enable **Interactivity** and set the request URL to `/api/slack/action`.
 Enable **Event Subscriptions** and set the request URL to `/api/slack/events`.
+If your app was installed before adding new scopes, reinstall it so Slack issues a token with the updated permissions.
 
 ### 5. Run locally
 
@@ -173,7 +176,7 @@ For Slack webhooks you'll need a public tunnel (e.g. [localtunnel](https://thebo
 | `STRIPE_PRICE_GROWTH` | Recurring price ID for the Growth plan (`price_...`) |
 | `STRIPE_PRICE_SCALE` | Recurring price ID for the Scale plan (`price_...`) |
 | `NEXT_PUBLIC_APP_URL` | Public URL of this app (`https://your-domain.com`) |
-| `ENCRYPTION_KEY` | Exactly 32 bytes for AES-256-GCM — generate: `openssl rand -hex 16` |
+| `ENCRYPTION_KEY` | Exactly 32 bytes for AES-256-GCM — generate: `openssl rand -hex 32` |
 | `CRON_SECRET` | Bearer token for the internal audit endpoint — generate: `openssl rand -hex 32` |
 
 ---
@@ -205,7 +208,7 @@ Seven tables, all with RLS enabled (service role access only):
 | `POST` | `/api/slack/action` | Slack signature | Receive Block Kit button clicks |
 | `POST` | `/api/stripe/checkout` | Session cookie | Create Stripe Checkout session |
 | `POST` | `/api/stripe/webhook` | Stripe signature | Process Stripe billing events |
-| `POST` | `/api/internal/audit` | Bearer `CRON_SECRET` | Run full workspace audit |
+| `GET` / `POST` | `/api/internal/audit` | Bearer `CRON_SECRET` | Run full workspace audit |
 
 ---
 
@@ -214,9 +217,9 @@ Seven tables, all with RLS enabled (service role access only):
 - **Slack signature verification** — every inbound Slack request is verified with HMAC-SHA256 and a constant-time comparison to prevent timing attacks.
 - **CSRF protection** — OAuth install generates a random `state` stored in an HttpOnly cookie; callback rejects mismatches.
 - **AES-256-GCM encryption** — Slack OAuth tokens are encrypted before storage. GCM provides both confidentiality and integrity (prevents padding oracle attacks).
-- **Idempotent webhooks** — Stripe events are de-duplicated via an INSERT-first pattern with a unique constraint, eliminating the SELECT-then-INSERT race condition.
+- **Idempotent webhooks** — Stripe events use explicit processing states (`processing` / `processed` / `failed`) to avoid duplicate execution and safely recover failed deliveries.
 - **Fail-fast env validation** — missing or malformed environment variables throw at first access with a clear error message, not deep in a handler.
-- **Dashboard auth** — middleware checks for a `workspace_session` HttpOnly cookie on every `/dashboard` request.
+- **Dashboard auth** — proxy checks for a `workspace_session` HttpOnly cookie on every `/dashboard` request.
 - **Service Role isolation** — the Supabase client uses the Service Role key server-side only; RLS blocks all anonymous access.
 
 ---
@@ -240,7 +243,7 @@ npm run dev          # Development server (Turbopack)
 npm run build        # Production build
 npm run start        # Production server
 npm run type-check   # TypeScript check (no emit)
-npm run lint         # ESLint
+npm run lint         # ESLint (flat config)
 npm run validate     # type-check + lint
 ```
 

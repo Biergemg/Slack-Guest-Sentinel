@@ -74,7 +74,7 @@ export function canRunBackgroundAudit(
     if (totalMembers > limits.maxMembers) {
         return {
             allowed: false,
-            reason: `Workspace exceeds the member limit for the ${planType.toUpperCase()} plan (max ${limits.maxMembers} members, found ${totalMembers}).`,
+            reason: `Workspace exceeds the guest-account limit for the ${planType.toUpperCase()} plan (max ${limits.maxMembers} guests, found ${totalMembers}).`,
             requiresUpgrade: true,
         };
     }

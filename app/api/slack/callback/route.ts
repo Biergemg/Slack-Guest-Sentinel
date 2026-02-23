@@ -139,9 +139,11 @@ export async function GET(request: Request) {
     response.cookies.set(CSRF.STATE_COOKIE_NAME, '', { maxAge: 0, path: '/' });
 
     return response;
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('Slack OAuth callback unexpected error', {}, err);
-    const errMsg = encodeURIComponent((err.message || String(err)).substring(0, 100));
+    const errMsg = encodeURIComponent(
+      (err instanceof Error ? err.message : String(err)).substring(0, 100)
+    );
     return NextResponse.redirect(new URL(`/?error=internal_${errMsg}`, request.url));
   }
 }

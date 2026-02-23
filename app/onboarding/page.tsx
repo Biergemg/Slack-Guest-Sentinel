@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { useEffect, useReducer } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
-import { BILLING } from '@/config/constants';
 import type { OnboardingScanResult } from '@/types/api.types';
 
 // ---------------------------------------------------------------------------
@@ -102,7 +101,7 @@ function ResultsStep({
           <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Starter</h3>
           <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$29<span className="text-lg text-gray-500 font-normal">/mo</span></p>
           <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
-            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 500 workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 500 guest accounts monitored</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Admin DM alerts</li>
           </ul>
@@ -119,9 +118,9 @@ function ResultsStep({
           <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Growth</h3>
           <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$79<span className="text-lg text-gray-500 font-normal">/mo</span></p>
           <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
-            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 5,000 workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 5,000 guest accounts monitored</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
-            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Multi-admin DM alerts</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Admin DM alerts</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Priority processing</li>
           </ul>
           <form action="/api/stripe/checkout" method="POST">
@@ -136,9 +135,9 @@ function ResultsStep({
           <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Scale</h3>
           <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$199<span className="text-lg text-gray-500 font-normal">/mo</span></p>
           <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
-            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Unlimited workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Unlimited guest accounts monitored</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
-            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Multi-admin DM alerts</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Admin DM alerts</li>
             <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Custom integrations support</li>
           </ul>
           <form action="/api/stripe/checkout" method="POST">

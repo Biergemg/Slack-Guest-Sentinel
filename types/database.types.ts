@@ -31,6 +31,7 @@ export type GuestActionTaken =
   | 'ignored_by_admin';
 
 export type WorkspacePlanType = 'free' | 'starter' | 'growth' | 'scale';
+export type StripeEventStatus = 'processing' | 'processed' | 'failed';
 
 // ---------------------------------------------------------------------------
 // workspaces
@@ -188,7 +189,11 @@ export interface WorkspaceEventInsert {
 
 export interface StripeEventHistory {
   stripe_event_id: string;
-  processed_at: string;
+  processed_at: string | null;
+  status: StripeEventStatus;
+  attempts: number;
+  last_error: string | null;
+  updated_at: string;
 }
 
 // ---------------------------------------------------------------------------
