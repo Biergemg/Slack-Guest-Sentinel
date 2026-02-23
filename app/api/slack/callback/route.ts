@@ -39,8 +39,9 @@ export async function GET(request: Request) {
   const expectedState = cookieStore.get(CSRF.STATE_COOKIE_NAME)?.value;
 
   if (!state || !expectedState || state !== expectedState) {
-    logger.warn('Slack OAuth state mismatch — possible CSRF attempt');
-    return NextResponse.redirect(new URL('/?error=state_mismatch', request.url));
+    logger.warn('Slack OAuth state mismatch — possible CSRF attempt', { state, expectedState });
+    const debugErrorMsg = `state_mismatch__param_${state}__cookie_${expectedState || 'MISSING'}`;
+    return NextResponse.redirect(new URL(`/?error=${debugErrorMsg}`, request.url));
   }
 
   const redirectUri = `${env.APP_URL}/api/slack/callback`;
