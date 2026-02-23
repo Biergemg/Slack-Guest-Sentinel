@@ -38,11 +38,15 @@ function requireEnvUrl(key: string): string {
 
 function requireEnvExactLength(key: string, bytes: number): string {
   const value = requireEnv(key);
-  if (Buffer.byteLength(value, 'utf8') !== bytes) {
+  // Support both 32-character utf8 strings and 64-character hex strings
+  const isHex = /^[0-9a-fA-F]+$/.test(value) && value.length === bytes * 2;
+  const actualBytes = isHex ? Buffer.from(value, 'hex').length : Buffer.byteLength(value, 'utf8');
+
+  if (actualBytes !== bytes) {
     throw new Error(
       `\n[env] Environment variable ${key} must be exactly ${bytes} bytes.\n` +
-      `  → Current length: ${Buffer.byteLength(value, 'utf8')} bytes.\n` +
-      `  → Generate with: openssl rand -hex ${bytes / 2}\n`
+      `  → Current length: ${actualBytes} bytes.\n` +
+      `  → Generate with: openssl rand -hex ${bytes} (hex) OR openssl rand -base64 ${bytes}\n`
     );
   }
   return value;

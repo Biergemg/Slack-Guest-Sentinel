@@ -22,8 +22,9 @@ const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
 function getKey(): Buffer {
-  // env.ts validates at startup that ENCRYPTION_KEY is exactly 32 bytes
-  return Buffer.from(env.ENCRYPTION_KEY, 'utf8');
+  // Support both 32-character utf8 strings and 64-character hex strings
+  const isHex = /^[0-9a-fA-F]+$/.test(env.ENCRYPTION_KEY) && env.ENCRYPTION_KEY.length === 64;
+  return Buffer.from(env.ENCRYPTION_KEY, isHex ? 'hex' : 'utf8');
 }
 
 /**
