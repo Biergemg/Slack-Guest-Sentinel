@@ -36,7 +36,6 @@ export class SubscriptionService {
         metadata: { workspaceId, plan },
       },
       client_reference_id: workspaceId,
-      customer_creation: 'always',
       success_url: `${env.APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.APP_URL}/onboarding?workspaceId=${workspaceId}`,
       metadata: { workspaceId, workspaceName, plan },
