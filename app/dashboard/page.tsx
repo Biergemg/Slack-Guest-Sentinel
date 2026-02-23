@@ -27,13 +27,18 @@ export default async function Dashboard({
     redirect('/?error=unauthorized');
   }
 
-  // Run both queries in parallel for faster page load
-  const [workspaceResult, auditRunResult, flaggedGuestsResult] = await Promise.all([
+  // Run all queries in parallel for faster page load
+  const [workspaceResult, subscriptionResult, auditRunResult, flaggedGuestsResult] = await Promise.all([
     supabase
       .from('workspaces')
       .select('plan_type')
       .eq('id', workspaceId)
       .single(),
+    supabase
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('workspace_id', workspaceId)
+      .maybeSingle(),
     supabase
       .from('audit_runs')
       .select('*')
@@ -51,6 +56,7 @@ export default async function Dashboard({
   ]);
 
   const planType = workspaceResult.data?.plan_type || 'free';
+  const stripeCustomerId = subscriptionResult.data?.stripe_customer_id ?? null;
 
   const auditRun = auditRunResult.data as AuditRun | null;
   const flaggedGuests = (flaggedGuestsResult.data ?? []) as GuestAudit[];
@@ -71,11 +77,23 @@ export default async function Dashboard({
             Workspace Dashboard
           </h1>
         </div>
-        {resolvedSearchParams.session_id && (
-          <span className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 px-4 py-2 rounded-full text-sm font-medium">
-            Subscription Active
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {resolvedSearchParams.session_id && (
+            <span className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 px-4 py-2 rounded-full text-sm font-medium">
+              Subscription Active
+            </span>
+          )}
+          {stripeCustomerId && (
+            <form method="POST" action="/api/stripe/portal">
+              <button
+                type="submit"
+                className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors"
+              >
+                Manage Billing
+              </button>
+            </form>
+          )}
+        </div>
       </header>
 
       {planType === 'free' && (

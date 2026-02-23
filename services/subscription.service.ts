@@ -48,6 +48,20 @@ export class SubscriptionService {
     logger.info('Stripe checkout session created', { workspaceId, sessionId: session.id, plan });
     return session.url;
   }
+
+  /**
+   * Creates a Stripe Customer Portal session for an existing subscriber.
+   * Returns the URL to redirect the user to.
+   */
+  async createPortalSession(customerId: string, returnUrl: string): Promise<string> {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+
+    logger.info('Stripe portal session created', { customerId });
+    return session.url;
+  }
 }
 
 export const subscriptionService = new SubscriptionService();
