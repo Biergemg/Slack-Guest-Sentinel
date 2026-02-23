@@ -1,7 +1,21 @@
+import Image from 'next/image';
+
 export default function Home() {
     return (
-        <main className="flex min-h-screen flex-col items-center justify-center p-24">
-            <h1 className="text-4xl font-bold mb-4">Slack Guest Sentinel</h1>
+        <main className="flex min-h-screen flex-col items-center justify-center p-24 text-center">
+            <div className="mb-6 flex justify-center">
+                <Image
+                    src="/logo.png"
+                    alt="Slack Guest Sentinel Logo"
+                    width={400}
+                    height={150}
+                    priority
+                    className="w-auto h-32 object-contain drop-shadow-md"
+                />
+            </div>
+            <h1 className="text-5xl font-extrabold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
+                Slack Guest Sentinel
+            </h1>
             <p className="text-xl text-gray-600 dark:text-gray-300">
                 Stop wasting money on inactive guests. Automatically detect and manage them.
             </p>

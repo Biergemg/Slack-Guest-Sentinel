@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { useEffect, useReducer } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
@@ -73,62 +74,87 @@ function ResultsStep({
   result: OnboardingScanResult;
   workspaceId: string;
 }) {
-  const yearlyWaste = result.monthlyWaste * 12;
-
   return (
-    <>
-      <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6">
-        <svg
-          className="w-8 h-8 text-green-600 dark:text-green-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
+    <div className="w-full text-left animate-in fade-in zoom-in duration-500">
+      <div className="mb-10 text-center">
+        <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-6">
+          Scan Complete. Here is your potential waste:
+        </h2>
+        <div className="flex flex-wrap justify-center gap-6 mb-4">
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm min-w-[160px]">
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Guests Detected</p>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{result.totalGuests}</p>
+          </div>
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/50 shadow-sm min-w-[160px]">
+            <p className="text-red-600 dark:text-red-400 text-sm font-medium">Inactive Guests</p>
+            <p className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">{result.inactiveGuests}</p>
+          </div>
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-900/50 shadow-sm min-w-[160px]">
+            <p className="text-green-700 dark:text-green-400 text-sm font-medium">Monthly Waste</p>
+            <p className="text-3xl font-bold text-green-700 dark:text-green-400 mt-1">${result.monthlyWaste.toLocaleString()}</p>
+          </div>
+        </div>
       </div>
 
-      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">
-        Workspace Scan Complete
-      </h2>
-
-      <dl className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 mb-8 text-left space-y-4">
-        <div className="flex justify-between items-center">
-          <dt className="text-gray-600 dark:text-gray-300">Total guests detected</dt>
-          <dd className="font-bold text-lg dark:text-white">{result.totalGuests}</dd>
+      <div className="grid md:grid-cols-3 gap-6 mb-6">
+        {/* Starter */}
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-6 flex flex-col bg-white dark:bg-gray-800 shadow-sm relative">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Starter</h3>
+          <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$29<span className="text-lg text-gray-500 font-normal">/mo</span></p>
+          <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 500 workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Admin DM alerts</li>
+          </ul>
+          <form action="/api/stripe/checkout" method="POST">
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="plan" value="starter" />
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
+          </form>
         </div>
-        <div className="flex justify-between items-center">
-          <dt className="text-red-500 font-semibold">Inactive guests</dt>
-          <dd className="font-bold text-lg text-red-500">{result.inactiveGuests}</dd>
-        </div>
-        <div className="border-t border-gray-200 dark:border-gray-600 pt-4 space-y-2">
-          <div className="flex justify-between items-center text-red-600 dark:text-red-400">
-            <dt className="font-bold">Potential Monthly Waste</dt>
-            <dd className="font-bold text-xl">${result.monthlyWaste.toLocaleString()}</dd>
-          </div>
-          <div className="flex justify-between items-center text-red-600 dark:text-red-400">
-            <dt className="font-bold">Potential Yearly Waste</dt>
-            <dd className="font-bold text-xl">${yearlyWaste.toLocaleString()}</dd>
-          </div>
-        </div>
-      </dl>
 
-      <p className="text-sm text-gray-500 mb-6">
-        Start your {BILLING.TRIAL_PERIOD_DAYS}-day free trial to automate this cleanup and save
-        money immediately.
-      </p>
+        {/* Growth */}
+        <div className="border-2 border-blue-500 rounded-xl p-6 flex flex-col bg-blue-50/50 dark:bg-blue-900/10 shadow-lg relative transform md:scale-105 z-10">
+          <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] tracking-wider uppercase font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">POPULAR</div>
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Growth</h3>
+          <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$79<span className="text-lg text-gray-500 font-normal">/mo</span></p>
+          <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Up to 5,000 workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Multi-admin DM alerts</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Priority processing</li>
+          </ul>
+          <form action="/api/stripe/checkout" method="POST">
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="plan" value="growth" />
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">Start 7-Day Trial</button>
+          </form>
+        </div>
 
-      <form action="/api/stripe/checkout" method="POST">
-        <input type="hidden" name="workspaceId" value={workspaceId} />
-        <button
-          type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg"
-        >
-          Start {BILLING.TRIAL_PERIOD_DAYS}-Day Free Trial
-        </button>
-      </form>
-    </>
+        {/* Scale */}
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-6 flex flex-col bg-white dark:bg-gray-800 shadow-sm relative">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Scale</h3>
+          <p className="text-4xl font-extrabold mb-4 text-gray-900 dark:text-white">$199<span className="text-lg text-gray-500 font-normal">/mo</span></p>
+          <ul className="text-sm text-gray-600 dark:text-gray-300 mb-8 flex-1 space-y-3">
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Unlimited workspace members</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Daily background audits</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Multi-admin DM alerts</li>
+            <li className="flex items-center"><span className="text-green-500 mr-2">✓</span> Custom integrations support</li>
+          </ul>
+          <form action="/api/stripe/checkout" method="POST">
+            <input type="hidden" name="workspaceId" value={workspaceId} />
+            <input type="hidden" name="plan" value="scale" />
+            <button type="submit" className="w-full bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="text-center mt-6">
+        <a href="/dashboard" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white underline transition-colors">
+          Skip trial and continue to Dashboard (Free Plan, manual scans only)
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -204,9 +230,24 @@ export default function Onboarding() {
     );
   }
 
+  const isResults = state.phase === 'results';
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-xl p-8 text-center">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-8 bg-gray-50 dark:bg-gray-900">
+      <div className="mb-6 flex justify-center">
+        <Image
+          src="/logo.png"
+          alt="Slack Guest Sentinel Logo"
+          width={240}
+          height={80}
+          priority
+          className="w-auto h-20 object-contain drop-shadow-sm"
+        />
+      </div>
+      <div
+        className={`w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center transition-all duration-500 ${isResults ? 'max-w-5xl' : 'max-w-md'
+          }`}
+      >
         {state.phase === 'connecting' && <ConnectingStep />}
         {state.phase === 'scanning' && <ScanningStep />}
         {state.phase === 'results' && (

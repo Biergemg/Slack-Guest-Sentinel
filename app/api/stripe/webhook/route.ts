@@ -58,6 +58,8 @@ export async function POST(request: Request) {
         const customerId =
           typeof session.customer === 'string' ? session.customer : null;
 
+        const plan = session.metadata?.plan || 'starter';
+
         if (!workspaceId) {
           logger.warn('checkout.session.completed missing client_reference_id', {
             sessionId: session.id,
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
           break;
         }
 
+        // 1. Update subscription mapping
         await supabase
           .from('subscriptions')
           .upsert(
@@ -72,13 +75,19 @@ export async function POST(request: Request) {
               workspace_id: workspaceId,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
-              plan: SUBSCRIPTION_PLAN.PRO,
+              plan: plan as any,
               status: SUBSCRIPTION_STATUS.ACTIVE,
             },
             { onConflict: 'workspace_id' }
           );
 
-        logger.info('Subscription created', { workspaceId, subscriptionId });
+        // 2. Cascade plan_type to workspace
+        await supabase
+          .from('workspaces')
+          .update({ plan_type: plan as any })
+          .eq('id', workspaceId);
+
+        logger.info('Subscription created', { workspaceId, subscriptionId, plan });
         break;
       }
 
@@ -89,17 +98,38 @@ export async function POST(request: Request) {
           subscription.status === SUBSCRIPTION_STATUS.ACTIVE ||
           subscription.status === SUBSCRIPTION_STATUS.TRIALING;
 
+        const priceId = subscription.items.data[0]?.price.id;
+        let planName = 'free';
+
+        if (isActive) {
+          if (priceId === env.STRIPE_PRICE_STARTER) planName = 'starter';
+          else if (priceId === env.STRIPE_PRICE_GROWTH) planName = 'growth';
+          else if (priceId === env.STRIPE_PRICE_SCALE) planName = 'scale';
+          else planName = 'starter'; // fallback
+        }
+
+        const workspaceId = subscription.metadata?.workspaceId;
+
         await supabase
           .from('subscriptions')
           .update({
             status: subscription.status,
-            plan: isActive ? SUBSCRIPTION_PLAN.PRO : SUBSCRIPTION_PLAN.FREE,
+            plan: planName as any,
           })
           .eq('stripe_subscription_id', subscription.id);
+
+        if (workspaceId) {
+          await supabase
+            .from('workspaces')
+            .update({ plan_type: planName as any })
+            .eq('id', workspaceId);
+        }
 
         logger.info('Subscription updated', {
           subscriptionId: subscription.id,
           status: subscription.status,
+          plan: planName,
+          workspaceId
         });
         break;
       }

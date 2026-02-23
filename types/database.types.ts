@@ -30,7 +30,7 @@ export type GuestActionTaken =
   | 'suggested_deactivation_accepted'
   | 'ignored_by_admin';
 
-export type WorkspacePlanType = 'standard' | 'enterprise';
+export type WorkspacePlanType = 'free' | 'starter' | 'growth' | 'scale';
 
 // ---------------------------------------------------------------------------
 // workspaces
@@ -52,6 +52,8 @@ export interface Workspace {
   plan_type: WorkspacePlanType;
   supports_user_deactivation: boolean;
   estimated_seat_cost: number;
+  is_active: boolean;
+  uninstalled_at: string | null;
   created_at: string;
 }
 
@@ -64,9 +66,11 @@ export interface WorkspaceInsert {
   refresh_token?: string | null;
   token_expires_at?: string | null;
   installed_by: string;
-  plan_type: WorkspacePlanType;
+  plan_type?: WorkspacePlanType;
   supports_user_deactivation: boolean;
   estimated_seat_cost?: number;
+  is_active?: boolean;
+  uninstalled_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +84,7 @@ export interface Subscription {
   stripe_subscription_id: string | null;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
+  billing_cycle_anchor: string | null;
   created_at: string;
 }
 
@@ -89,6 +94,7 @@ export interface SubscriptionUpsert {
   stripe_subscription_id?: string | null;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
+  billing_cycle_anchor?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,4 +189,25 @@ export interface WorkspaceEventInsert {
 export interface StripeEventHistory {
   stripe_event_id: string;
   processed_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// workspace_usage
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceUsage {
+  workspace_id: string;
+  scans_this_week: number;
+  last_scan_at: string | null;
+  alerts_sent: number;
+  audit_runtime_ms: number;
+  updated_at: string;
+}
+
+export interface WorkspaceUsageUpsert {
+  workspace_id: string;
+  scans_this_week?: number;
+  last_scan_at?: string | null;
+  alerts_sent?: number;
+  audit_runtime_ms?: number;
 }

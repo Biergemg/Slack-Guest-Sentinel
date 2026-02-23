@@ -22,6 +22,7 @@ import {
   buildInactiveGuestBlocks,
 } from '@/lib/slack';
 import { logger } from '@/lib/logger';
+import { canRunBackgroundAudit } from '@/lib/subscription';
 import {
   AUDIT,
   BILLING,
@@ -95,20 +96,16 @@ export class AuditService {
   // ---------------------------------------------------------------------------
 
   private async fetchActiveWorkspaces(): Promise<Workspace[]> {
-    // Single JOIN query — replaces the original two-query approach
     const { data, error } = await supabase
-      .from('subscriptions')
-      .select('workspace_id, workspaces!inner(*)')
-      .in('status', ['active', 'trialing']);
+      .from('workspaces')
+      .select('*')
+      .neq('plan_type', 'free');
 
     if (error) {
       throw new Error(`Failed to fetch active workspaces: ${error.message}`);
     }
 
-    return (data ?? []).map((row) => {
-      const record = row as unknown as { workspaces: Workspace };
-      return record.workspaces;
-    });
+    return data ?? [];
   }
 
   private async auditWorkspace(workspace: Workspace): Promise<{ flagged: number }> {
@@ -119,6 +116,12 @@ export class AuditService {
       const token = decrypt(workspace.access_token);
       const guests = await getGuests(token);
       const costPerSeat = workspace.estimated_seat_cost ?? BILLING.DEFAULT_SEAT_COST_USD;
+
+      const { allowed, reason } = canRunBackgroundAudit(workspace.plan_type, guests.length);
+      if (!allowed) {
+        logger.warn('Skipping workspace audit, plan limits exceeded', { workspaceId: workspace.id, reason });
+        return { flagged: 0 };
+      }
 
       // Score all guests concurrently
       const scoredGuests = await this.scoreGuests(token, guests);

@@ -17,82 +17,38 @@ export class SubscriptionService {
    * Creates a Stripe Checkout session for a workspace.
    * Returns the URL to redirect the user to.
    */
-  async createCheckoutSession(workspaceId: string, workspaceName: string): Promise<string> {
+  async createCheckoutSession(workspaceId: string, workspaceName: string, plan: 'starter' | 'growth' | 'scale'): Promise<string> {
+    const priceId =
+      plan === 'starter' ? env.STRIPE_PRICE_STARTER :
+        plan === 'growth' ? env.STRIPE_PRICE_GROWTH :
+          env.STRIPE_PRICE_SCALE;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
-          price: env.STRIPE_PRICE_ID,
+          price: priceId,
           quantity: 1,
         },
       ],
       mode: 'subscription',
       subscription_data: {
         trial_period_days: BILLING.TRIAL_PERIOD_DAYS,
-        metadata: { workspaceId },
+        metadata: { workspaceId, plan },
       },
       client_reference_id: workspaceId,
       customer_creation: 'always',
       success_url: `${env.APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.APP_URL}/onboarding?workspaceId=${workspaceId}`,
-      metadata: { workspaceId, workspaceName },
+      metadata: { workspaceId, workspaceName, plan },
     });
 
     if (!session.url) {
       throw new Error(`Stripe checkout session created without URL for workspace ${workspaceId}`);
     }
 
-    logger.info('Stripe checkout session created', { workspaceId, sessionId: session.id });
+    logger.info('Stripe checkout session created', { workspaceId, sessionId: session.id, plan });
     return session.url;
-  }
-
-  /**
-   * Handles a successful checkout completion.
-   * Creates or updates the subscription record for the workspace.
-   */
-  async handleCheckoutCompleted(workspaceId: string, customerId: string, subscriptionId: string): Promise<void> {
-    const data: SubscriptionUpsert = {
-      workspace_id: workspaceId,
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subscriptionId,
-      plan: SUBSCRIPTION_PLAN.PRO,
-      status: SUBSCRIPTION_STATUS.ACTIVE,
-    };
-
-    const { error } = await supabase
-      .from('subscriptions')
-      .upsert(data, { onConflict: 'workspace_id' });
-
-    if (error) {
-      logger.error('Failed to upsert subscription on checkout', { workspaceId }, error);
-      throw error;
-    }
-
-    logger.info('Subscription created from checkout', { workspaceId, subscriptionId });
-  }
-
-  /**
-   * Syncs subscription state from a Stripe subscription object.
-   * Used for both subscription.updated and subscription.deleted events.
-   */
-  async syncSubscriptionStatus(stripeSubscriptionId: string, status: string): Promise<void> {
-    const isActive =
-      status === SUBSCRIPTION_STATUS.ACTIVE || status === SUBSCRIPTION_STATUS.TRIALING;
-
-    const { error } = await supabase
-      .from('subscriptions')
-      .update({
-        status: status as typeof SUBSCRIPTION_STATUS[keyof typeof SUBSCRIPTION_STATUS],
-        plan: isActive ? SUBSCRIPTION_PLAN.PRO : SUBSCRIPTION_PLAN.FREE,
-      })
-      .eq('stripe_subscription_id', stripeSubscriptionId);
-
-    if (error) {
-      logger.error('Failed to sync subscription status', { stripeSubscriptionId, status }, error);
-      throw error;
-    }
-
-    logger.info('Subscription status synced', { stripeSubscriptionId, status });
   }
 }
 

@@ -14,9 +14,14 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const workspaceId = formData.get('workspaceId');
+    const plan = formData.get('plan');
 
     if (!workspaceId || typeof workspaceId !== 'string') {
       return NextResponse.redirect(new URL('/?error=missing_workspace', request.url));
+    }
+
+    if (!plan || typeof plan !== 'string' || !['starter', 'growth', 'scale'].includes(plan)) {
+      return NextResponse.redirect(new URL('/dashboard?error=invalid_plan', request.url));
     }
 
     const { data: workspace } = await supabase
@@ -32,7 +37,8 @@ export async function POST(request: Request) {
 
     const checkoutUrl = await subscriptionService.createCheckoutSession(
       workspace.id,
-      workspace.team_name
+      workspace.team_name,
+      plan as 'starter' | 'growth' | 'scale'
     );
 
     return NextResponse.redirect(checkoutUrl, 303);

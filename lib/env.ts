@@ -61,7 +61,9 @@ export const env = {
   // Stripe
   get STRIPE_SECRET_KEY() { return requireEnv('STRIPE_SECRET_KEY'); },
   get STRIPE_WEBHOOK_SECRET() { return requireEnv('STRIPE_WEBHOOK_SECRET'); },
-  get STRIPE_PRICE_ID() { return requireEnv('STRIPE_PRICE_ID'); },
+  get STRIPE_PRICE_STARTER() { return requireEnv('STRIPE_PRICE_STARTER'); },
+  get STRIPE_PRICE_GROWTH() { return requireEnv('STRIPE_PRICE_GROWTH'); },
+  get STRIPE_PRICE_SCALE() { return requireEnv('STRIPE_PRICE_SCALE'); },
 
   // App
   get APP_URL() { return requireEnvUrl('NEXT_PUBLIC_APP_URL'); },

@@ -40,6 +40,24 @@ export class SlackEventService {
     // Handle specific event types
     if (event.type === 'invite_requested') {
       await this.handleInviteRequested(workspaceId, callback);
+    } else if (event.type === 'app_uninstalled') {
+      await this.handleAppUninstalled(workspaceId);
+    }
+  }
+
+  private async handleAppUninstalled(workspaceId: string): Promise<void> {
+    const { error } = await supabase
+      .from('workspaces')
+      .update({
+        bot_token: null, // Clear tokens for security
+        refresh_token: null,
+      })
+      .eq('id', workspaceId);
+
+    if (error) {
+      logger.error('Failed to handle app_uninstalled', { workspaceId }, error);
+    } else {
+      logger.info('App uninstalled, workspace tokens cleared', { workspaceId });
     }
   }
 
@@ -54,8 +72,8 @@ export class SlackEventService {
       typeof event.invited_user === 'string'
         ? event.invited_user
         : typeof event.invited_user === 'object' && event.invited_user !== null
-        ? (event.invited_user as { id: string }).id
-        : null;
+          ? (event.invited_user as { id: string }).id
+          : null;
 
     // user is the sponsor (the person sending the invite)
     const sponsorUserId = typeof event.user === 'string' ? event.user : null;
