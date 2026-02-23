@@ -42,8 +42,9 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.redirect(checkoutUrl, 303);
-  } catch (err) {
+  } catch (err: any) {
     logger.error('Stripe checkout error', {}, err);
-    return NextResponse.redirect(new URL('/?error=internal_error', request.url));
+    const diagCode = encodeURIComponent((err.message || String(err)).slice(0, 100));
+    return NextResponse.redirect(new URL(`/?error=internal_error&detail=${diagCode}`, request.url));
   }
 }
