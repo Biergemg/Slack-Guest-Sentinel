@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { supabase } from '@/lib/db';
 import { encrypt } from '@/lib/encryption';
 import { env } from '@/lib/env';
@@ -34,12 +35,8 @@ export async function GET(request: Request) {
   }
 
   // Validate CSRF state parameter
-  const cookieHeader = request.headers.get('cookie') ?? '';
-  const stateCookieMatch = cookieHeader
-    .split(';')
-    .map(c => c.trim())
-    .find(c => c.startsWith(`${CSRF.STATE_COOKIE_NAME}=`));
-  const expectedState = stateCookieMatch?.split('=')[1];
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get(CSRF.STATE_COOKIE_NAME)?.value;
 
   if (!state || !expectedState || state !== expectedState) {
     logger.warn('Slack OAuth state mismatch — possible CSRF attempt');
