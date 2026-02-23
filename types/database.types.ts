@@ -23,7 +23,7 @@ export type SubscriptionStatus =
   | 'incomplete_expired'
   | 'paused';
 
-export type SubscriptionPlan = 'free' | 'pro' | 'enterprise';
+export type SubscriptionPlan = 'free' | 'starter' | 'growth' | 'scale';
 
 export type GuestActionTaken =
   | 'flagged'

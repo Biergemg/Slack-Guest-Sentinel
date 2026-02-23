@@ -39,12 +39,18 @@ export async function GET(request: Request) {
   const expectedState = cookieStore.get(CSRF.STATE_COOKIE_NAME)?.value;
 
   if (!state || !expectedState || state !== expectedState) {
-    logger.warn('Slack OAuth state mismatch — possible CSRF attempt', { state, expectedState });
-    const debugErrorMsg = `state_mismatch__param_${state}__cookie_${expectedState || 'MISSING'}`;
-    return NextResponse.redirect(new URL(`/?error=${debugErrorMsg}`, request.url));
+    // Log full details server-side for debugging — never expose raw state values in the URL
+    logger.warn('Slack OAuth state mismatch — possible CSRF attempt or cookie loss', {
+      statePresent: !!state,
+      cookiePresent: !!expectedState,
+      match: state === expectedState,
+    });
+    return NextResponse.redirect(new URL('/?error=state_mismatch', request.url));
   }
 
-  const redirectUri = `${env.APP_URL}/api/slack/callback`;
+  // Must match the redirect_uri used in /api/slack/install — both derived from
+  // the request origin so they are always self-consistent.
+  const redirectUri = `${new URL(request.url).origin}/api/slack/callback`;
 
   try {
     // Exchange code for access token

@@ -13,14 +13,15 @@ Slack charges per guest seat — whether they're active or not. Slack Guest Sent
 
 ### Inactivity scoring
 
-Each guest receives a score:
+Each guest receives a score from three signals evaluated cheapest-first:
 
-| Signal | Points |
-|---|---|
-| Profile updated within 30 days | +1 |
-| Currently `active` in Slack | +2 |
+| Signal | Points | Cost |
+|---|---|---|
+| Profile updated within 30 days | +1.0 | Free — from `users.list` |
+| Currently presence-active | +0.5 | Cheap — 1 API call |
+| Sent a message within 30 days | +3.0 | Expensive — 1–3 API calls |
 
-Score ≤ 0 → flagged as inactive. Presence is only checked when the profile signal is absent (saves API calls).
+Score < 1.0 → flagged as inactive. Evaluation short-circuits as soon as the threshold is reached to minimize API calls. Presence alone (0.5) is not enough to mark a guest active — they need a profile update or a real message.
 
 ---
 
@@ -168,7 +169,9 @@ For Slack webhooks you'll need a public tunnel (e.g. [localtunnel](https://thebo
 | `SLACK_SIGNING_SECRET` | From Slack app Basic Information — used to verify webhook signatures |
 | `STRIPE_SECRET_KEY` | `sk_test_...` or `sk_live_...` |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe Dashboard → Webhooks → Signing secret |
-| `STRIPE_PRICE_ID` | Recurring subscription price ID (`price_...`) |
+| `STRIPE_PRICE_STARTER` | Recurring price ID for the Starter plan (`price_...`) |
+| `STRIPE_PRICE_GROWTH` | Recurring price ID for the Growth plan (`price_...`) |
+| `STRIPE_PRICE_SCALE` | Recurring price ID for the Scale plan (`price_...`) |
 | `NEXT_PUBLIC_APP_URL` | Public URL of this app (`https://your-domain.com`) |
 | `ENCRYPTION_KEY` | Exactly 32 bytes for AES-256-GCM — generate: `openssl rand -hex 16` |
 | `CRON_SECRET` | Bearer token for the internal audit endpoint — generate: `openssl rand -hex 32` |

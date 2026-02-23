@@ -203,8 +203,11 @@ export default function Onboarding() {
       dispatch({ type: 'START_SCAN' });
 
       fetch(`/api/slack/onboarding-scan?workspaceId=${workspaceId}`)
-        .then(res => {
-          if (!res.ok) throw new Error(`Scan request failed: HTTP ${res.status}`);
+        .then(async res => {
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({})) as { error?: string };
+            throw new Error(body.error ?? `Scan failed (HTTP ${res.status})`);
+          }
           return res.json() as Promise<OnboardingScanResult>;
         })
         .then(result => dispatch({ type: 'SCAN_SUCCESS', result }))

@@ -9,8 +9,7 @@ import { stripe } from '@/lib/stripe';
 import { supabase } from '@/lib/db';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { BILLING, SUBSCRIPTION_PLAN, SUBSCRIPTION_STATUS } from '@/config/constants';
-import type { SubscriptionUpsert } from '@/types/database.types';
+import { BILLING } from '@/config/constants';
 
 export class SubscriptionService {
   /**

@@ -46,18 +46,22 @@ export class SlackEventService {
   }
 
   private async handleAppUninstalled(workspaceId: string): Promise<void> {
+    // Note: access_token is NOT NULL so we cannot clear it; marking is_active=false
+    // prevents the workspace from being picked up by the audit cron.
+    // The refresh_token can be nulled out immediately.
     const { error } = await supabase
       .from('workspaces')
       .update({
-        bot_token: null, // Clear tokens for security
         refresh_token: null,
+        is_active: false,
+        uninstalled_at: new Date().toISOString(),
       })
       .eq('id', workspaceId);
 
     if (error) {
       logger.error('Failed to handle app_uninstalled', { workspaceId }, error);
     } else {
-      logger.info('App uninstalled, workspace tokens cleared', { workspaceId });
+      logger.info('App uninstalled, workspace marked inactive', { workspaceId });
     }
   }
 

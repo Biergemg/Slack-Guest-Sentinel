@@ -4,8 +4,9 @@ import { stripe } from '@/lib/stripe';
 import { supabase } from '@/lib/db';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { SUBSCRIPTION_PLAN, SUBSCRIPTION_STATUS } from '@/config/constants';
+import { SUBSCRIPTION_STATUS } from '@/config/constants';
 import type Stripe from 'stripe';
+import type { SubscriptionPlan, WorkspacePlanType } from '@/types/database.types';
 
 /**
  * Processes Stripe webhook events.
@@ -58,7 +59,11 @@ export async function POST(request: Request) {
         const customerId =
           typeof session.customer === 'string' ? session.customer : null;
 
-        const plan = session.metadata?.plan || 'starter';
+        const VALID_PAID_PLANS: SubscriptionPlan[] = ['starter', 'growth', 'scale'];
+        const rawPlan = session.metadata?.plan ?? '';
+        const plan: SubscriptionPlan = VALID_PAID_PLANS.includes(rawPlan as SubscriptionPlan)
+          ? (rawPlan as SubscriptionPlan)
+          : 'starter';
 
         if (!workspaceId) {
           logger.warn('checkout.session.completed missing client_reference_id', {
@@ -75,7 +80,7 @@ export async function POST(request: Request) {
               workspace_id: workspaceId,
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
-              plan: plan as any,
+              plan,
               status: SUBSCRIPTION_STATUS.ACTIVE,
             },
             { onConflict: 'workspace_id' }
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
         // 2. Cascade plan_type to workspace
         await supabase
           .from('workspaces')
-          .update({ plan_type: plan as any })
+          .update({ plan_type: plan as WorkspacePlanType })
           .eq('id', workspaceId);
 
         logger.info('Subscription created', { workspaceId, subscriptionId, plan });
@@ -99,14 +104,12 @@ export async function POST(request: Request) {
           subscription.status === SUBSCRIPTION_STATUS.TRIALING;
 
         const priceId = subscription.items.data[0]?.price.id;
-        let planName = 'free';
-
-        if (isActive) {
-          if (priceId === env.STRIPE_PRICE_STARTER) planName = 'starter';
-          else if (priceId === env.STRIPE_PRICE_GROWTH) planName = 'growth';
-          else if (priceId === env.STRIPE_PRICE_SCALE) planName = 'scale';
-          else planName = 'starter'; // fallback
-        }
+        const planName: SubscriptionPlan = isActive
+          ? priceId === env.STRIPE_PRICE_STARTER ? 'starter'
+            : priceId === env.STRIPE_PRICE_GROWTH ? 'growth'
+              : priceId === env.STRIPE_PRICE_SCALE ? 'scale'
+                : 'starter' // unknown price ID — safe fallback
+          : 'free';
 
         const workspaceId = subscription.metadata?.workspaceId;
 
@@ -114,14 +117,14 @@ export async function POST(request: Request) {
           .from('subscriptions')
           .update({
             status: subscription.status,
-            plan: planName as any,
+            plan: planName,
           })
           .eq('stripe_subscription_id', subscription.id);
 
         if (workspaceId) {
           await supabase
             .from('workspaces')
-            .update({ plan_type: planName as any })
+            .update({ plan_type: planName as WorkspacePlanType })
             .eq('id', workspaceId);
         }
 

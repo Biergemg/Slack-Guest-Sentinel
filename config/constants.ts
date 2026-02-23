@@ -77,8 +77,9 @@ export const SUBSCRIPTION_STATUS = {
 
 export const SUBSCRIPTION_PLAN = {
   FREE: 'free',
-  PRO: 'pro',
-  ENTERPRISE: 'enterprise',
+  STARTER: 'starter',
+  GROWTH: 'growth',
+  SCALE: 'scale',
 } as const;
 
 export const GUEST_ACTION = {

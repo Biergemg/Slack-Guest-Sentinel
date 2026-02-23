@@ -99,7 +99,8 @@ export class AuditService {
     const { data, error } = await supabase
       .from('workspaces')
       .select('*')
-      .neq('plan_type', 'free');
+      .neq('plan_type', 'free')
+      .eq('is_active', true);
 
     if (error) {
       throw new Error(`Failed to fetch active workspaces: ${error.message}`);
