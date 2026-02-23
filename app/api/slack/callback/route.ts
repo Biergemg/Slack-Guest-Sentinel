@@ -115,7 +115,10 @@ export async function GET(request: Request) {
 
     if (dbError || !workspace) {
       logger.error('Failed to upsert workspace', { teamId: team.id }, dbError);
-      return NextResponse.redirect(new URL('/?error=db_error', request.url));
+      const diagCode = encodeURIComponent(
+        dbError?.code ?? dbError?.message?.slice(0, 60) ?? 'unknown'
+      );
+      return NextResponse.redirect(new URL(`/?error=db_error&detail=${diagCode}`, request.url));
     }
 
     logger.info('Workspace installed', { workspaceId: workspace.id, teamId: team.id });

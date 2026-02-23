@@ -119,6 +119,7 @@ export default async function Home({
 }) {
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams.error as string | undefined;
+  const errorDetail = resolvedSearchParams.detail as string | undefined;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16 text-center bg-white dark:bg-gray-950">
@@ -164,6 +165,9 @@ export default async function Home({
         <div className="mb-8 bg-red-50 border-l-4 border-red-500 text-red-700 p-4 max-w-lg rounded-r-lg text-left" role="alert">
           <p className="font-bold mb-1">Installation failed</p>
           <p className="text-sm">{getErrorMessage(errorCode)}</p>
+          {errorDetail && (
+            <p className="text-xs font-mono mt-2 text-red-500 opacity-75">code: {errorDetail}</p>
+          )}
         </div>
       )}
 
