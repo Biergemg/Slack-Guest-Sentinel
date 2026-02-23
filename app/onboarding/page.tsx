@@ -108,7 +108,7 @@ function ResultsStep({
           <form action="/api/stripe/checkout" method="POST">
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="plan" value="starter" />
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
+            <button type="submit" className="w-full cursor-pointer bg-blue-600 hover:bg-blue-700 hover:brightness-95 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
           </form>
         </div>
 
@@ -126,7 +126,7 @@ function ResultsStep({
           <form action="/api/stripe/checkout" method="POST">
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="plan" value="growth" />
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">Start 7-Day Trial</button>
+            <button type="submit" className="w-full cursor-pointer bg-blue-600 hover:bg-blue-700 hover:brightness-95 text-white font-bold py-3 rounded-lg shadow-md transition-colors">Start 7-Day Trial</button>
           </form>
         </div>
 
@@ -143,7 +143,7 @@ function ResultsStep({
           <form action="/api/stripe/checkout" method="POST">
             <input type="hidden" name="workspaceId" value={workspaceId} />
             <input type="hidden" name="plan" value="scale" />
-            <button type="submit" className="w-full bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
+            <button type="submit" className="w-full cursor-pointer bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 hover:brightness-95 text-white font-semibold py-3 rounded-lg transition-colors">Start 7-Day Trial</button>
           </form>
         </div>
       </div>

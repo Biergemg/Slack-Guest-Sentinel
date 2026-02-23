@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+button,
+[type='button'],
+[type='submit'],
+[role='button'] {
+  cursor: pointer;
+}
+
+button:disabled,
+[type='button']:disabled,
+[type='submit']:disabled {
+  cursor: not-allowed;
+}
