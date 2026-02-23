@@ -29,7 +29,7 @@ const nextConfig = {
               "connect-src 'self' https://*.supabase.co https://api.stripe.com https://slack.com; " +
               "frame-ancestors 'none'; " +
               "base-uri 'self'; " +
-              "form-action 'self';",
+              "form-action 'self' https://checkout.stripe.com https://billing.stripe.com;",
           },
           // Disable access to sensors and device features
           {
