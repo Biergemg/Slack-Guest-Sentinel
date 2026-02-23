@@ -25,8 +25,8 @@ export async function GET() {
   // Store state in HttpOnly cookie — validated in /api/slack/callback
   response.cookies.set(CSRF.STATE_COOKIE_NAME, state, {
     httpOnly: true,
-    secure: env.IS_PRODUCTION,
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none',
     maxAge: CSRF.STATE_COOKIE_MAX_AGE_SECONDS,
     path: '/',
   });
