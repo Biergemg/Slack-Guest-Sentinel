@@ -6,7 +6,7 @@
     },
     "oauth_config": {
         "redirect_urls": [
-            "https://sentinelexpress.loca.lt/api/slack/callback"
+            "https://your-domain.com/api/slack/callback"
         ],
         "scopes": {
             "user": [
@@ -21,7 +21,7 @@
     "settings": {
         "interactivity": {
             "is_enabled": true,
-            "request_url": "https://sentinelexpress.loca.lt/api/slack/action"
+            "request_url": "https://your-domain.com/api/slack/action"
         },
         "org_deploy_enabled": false,
         "socket_mode_enabled": false,

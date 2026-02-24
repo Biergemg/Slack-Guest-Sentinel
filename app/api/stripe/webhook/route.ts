@@ -6,7 +6,7 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { SUBSCRIPTION_STATUS } from '@/config/constants';
 import type Stripe from 'stripe';
-import type { SubscriptionPlan, WorkspacePlanType } from '@/types/database.types';
+import type { SubscriptionPlan } from '@/types/database.types';
 
 /**
  * Processes Stripe webhook events.
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
     logger.info('Stripe event currently processing, skipping duplicate delivery', {
       eventId: event.id,
     });
-    return NextResponse.json({ received: true });
+    return new Response('Conflict - already processing', { status: 409 });
   }
 
   try {
@@ -227,13 +227,22 @@ export async function POST(request: Request) {
         const customerId =
           typeof session.customer === 'string' ? session.customer : null;
 
-        const plan = await resolveCheckoutPlan(session, subscriptionId);
-
         if (!workspaceId) {
           logger.warn('checkout.session.completed missing client_reference_id', {
             sessionId: session.id,
           });
           break;
+        }
+
+        const plan = await resolveCheckoutPlan(session, subscriptionId);
+
+        // Read the actual Stripe subscription status (may be 'trialing' when
+        // trial_period_days is configured, not 'active'). Hardcoding 'active'
+        // would misrepresent the subscription state in the DB.
+        let actualStatus: string = SUBSCRIPTION_STATUS.ACTIVE;
+        if (subscriptionId) {
+          const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+          actualStatus = stripeSubscription.status;
         }
 
         // 1. Update subscription mapping
@@ -245,23 +254,13 @@ export async function POST(request: Request) {
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
               plan,
-              status: SUBSCRIPTION_STATUS.ACTIVE,
+              status: actualStatus,
             },
             { onConflict: 'workspace_id' }
           );
 
         if (upsertError) {
           throw new Error(`Failed to upsert subscription: ${upsertError.message}`);
-        }
-
-        // 2. Cascade plan_type to workspace
-        const { error: workspaceUpdateError } = await supabase
-          .from('workspaces')
-          .update({ plan_type: plan as WorkspacePlanType })
-          .eq('id', workspaceId);
-
-        if (workspaceUpdateError) {
-          throw new Error(`Failed to update workspace plan: ${workspaceUpdateError.message}`);
         }
 
         logger.info('Subscription created', { workspaceId, subscriptionId, plan });
@@ -286,24 +285,8 @@ export async function POST(request: Request) {
 
         const planName: SubscriptionPlan = isActive ? (planFromPrice as SubscriptionPlan) : 'free';
 
-        const { data: updatedSubscription, error: subscriptionUpdateError } = await supabase
-          .from('subscriptions')
-          .update({
-            status: subscription.status,
-            plan: planName,
-          })
-          .eq('stripe_subscription_id', subscription.id)
-          .select('workspace_id')
-          .maybeSingle();
-
-        if (subscriptionUpdateError) {
-          throw new Error(`Failed to update subscription status: ${subscriptionUpdateError.message}`);
-        }
-
+        // Let's resolve workspaceId first
         let workspaceId: string | null = subscription.metadata?.workspaceId ?? null;
-        if (!workspaceId) {
-          workspaceId = (updatedSubscription as { workspace_id?: string } | null)?.workspace_id ?? null;
-        }
 
         if (!workspaceId && typeof subscription.customer === 'string') {
           const { data: customerLookup, error: customerLookupError } = await supabase
@@ -316,24 +299,35 @@ export async function POST(request: Request) {
             throw new Error(`Failed to resolve workspace by customer ID: ${customerLookupError.message}`);
           }
 
-          workspaceId = (customerLookup as { workspace_id?: string } | null)?.workspace_id ?? null;
+          workspaceId = customerLookup?.workspace_id ?? null;
         }
 
-        if (workspaceId) {
-          const { error: workspaceUpdateError } = await supabase
-            .from('workspaces')
-            .update({ plan_type: planName as WorkspacePlanType })
-            .eq('id', workspaceId);
-
-          if (workspaceUpdateError) {
-            throw new Error(`Failed to update workspace from subscription event: ${workspaceUpdateError.message}`);
-          }
-        } else {
+        if (!workspaceId) {
           logger.warn('Subscription event could not resolve workspace ID', {
             subscriptionId: subscription.id,
             customerId: subscription.customer,
             eventType: event.type,
           });
+          break;
+        }
+
+        // Upsert ensures we catch updates even if checkout.session.completed 
+        // hasn't successfully stored the subscription map yet.
+        const { error: upsertError } = await supabase
+          .from('subscriptions')
+          .upsert(
+            {
+              workspace_id: workspaceId,
+              stripe_customer_id: typeof subscription.customer === 'string' ? subscription.customer : null,
+              stripe_subscription_id: subscription.id,
+              plan: planName,
+              status: subscription.status,
+            },
+            { onConflict: 'workspace_id' }
+          );
+
+        if (upsertError) {
+          throw new Error(`Failed to upsert subscription status: ${upsertError.message}`);
         }
 
         logger.info('Subscription updated', {

@@ -1,6 +1,6 @@
 # Slack Guest Sentinel
 
-Slack charges per guest seat — whether they're active or not. Slack Guest Sentinel automatically detects inactive guests in your workspace and alerts admins via DM so you can act before the next billing cycle.
+Slack charges for every **Multi-Channel Guest** seat — whether they're active or not. Single-channel guests are free, but Multi-channel guests cost the same as a regular employee. Slack Guest Sentinel automatically detects inactive guests in your workspace and alerts admins via DM so you can act before the next billing cycle.
 
 ## How it works
 
@@ -52,6 +52,7 @@ slack-guest-sentinel/
 │   │   │   └── onboarding-scan/route.ts  # Fast guest scan for onboarding page
 │   │   ├── stripe/
 │   │   │   ├── checkout/route.ts         # Creates Stripe Checkout session
+│   │   │   ├── portal/route.ts           # Creates Stripe Customer Portal session
 │   │   │   └── webhook/route.ts          # Processes Stripe webhooks (idempotent)
 │   │   └── internal/
 │   │       └── audit/route.ts            # Daily cron endpoint (Vercel Cron)
@@ -93,7 +94,7 @@ slack-guest-sentinel/
 │   └── api.types.ts                      # Route request/response types
 │
 ├── supabase/migrations/                  # Database schema
-├── proxy.ts                              # Protects /dashboard with session cookie
+├── middleware.ts                          # Protects /dashboard with encrypted session cookie
 ├── slack_manifest.json                   # Slack app manifest
 └── vercel.json                           # Cron job schedule
 ```
@@ -207,6 +208,7 @@ Seven tables, all with RLS enabled (service role access only):
 | `POST` | `/api/slack/events` | Slack signature | Receive Slack event webhooks |
 | `POST` | `/api/slack/action` | Slack signature | Receive Block Kit button clicks |
 | `POST` | `/api/stripe/checkout` | Session cookie | Create Stripe Checkout session |
+| `POST` | `/api/stripe/portal` | Session cookie | Create Stripe Customer Portal session |
 | `POST` | `/api/stripe/webhook` | Stripe signature | Process Stripe billing events |
 | `GET` / `POST` | `/api/internal/audit` | Bearer `CRON_SECRET` | Run full workspace audit |
 
@@ -217,9 +219,9 @@ Seven tables, all with RLS enabled (service role access only):
 - **Slack signature verification** — every inbound Slack request is verified with HMAC-SHA256 and a constant-time comparison to prevent timing attacks.
 - **CSRF protection** — OAuth install generates a random `state` stored in an HttpOnly cookie; callback rejects mismatches.
 - **AES-256-GCM encryption** — Slack OAuth tokens are encrypted before storage. GCM provides both confidentiality and integrity (prevents padding oracle attacks).
-- **Idempotent webhooks** — Stripe events use explicit processing states (`processing` / `processed` / `failed`) to avoid duplicate execution and safely recover failed deliveries.
+- **Idempotent webhooks** — Stripe events use explicit processing states (`processing` / `processed` / `failed`) with `409 Conflict` for in-flight events, avoiding duplicate execution and safely recovering from retries.
+- **Encrypted session cookies** — the workspace ID is encrypted with AES-256-GCM before being stored in the session cookie. Middleware decrypts and validates on every `/dashboard` request, rejecting tampered cookies.
 - **Fail-fast env validation** — missing or malformed environment variables throw at first access with a clear error message, not deep in a handler.
-- **Dashboard auth** — proxy checks for a `workspace_session` HttpOnly cookie on every `/dashboard` request.
 - **Service Role isolation** — the Supabase client uses the Service Role key server-side only; RLS blocks all anonymous access.
 
 ---

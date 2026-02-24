@@ -2,25 +2,25 @@ import { WorkspacePlanType } from '@/types/database.types';
 
 export const PLAN_LIMITS = {
     free: {
-        maxMembers: Infinity, // No block on scans, but cron disabled 
+        maxGuests: Infinity, // No block on scans, but cron disabled 
         canRunCron: false,
         canSendAlerts: false,
         minHoursBetweenScans: 24,
     },
     starter: {
-        maxMembers: 500,
+        maxGuests: 500,
         canRunCron: true,
         canSendAlerts: true,
         minHoursBetweenScans: 0, // No scanning limit, always allowed
     },
     growth: {
-        maxMembers: 5000,
+        maxGuests: 5000,
         canRunCron: true,
         canSendAlerts: true,
         minHoursBetweenScans: 0,
     },
     scale: {
-        maxMembers: Infinity,
+        maxGuests: Infinity,
         canRunCron: true,
         canSendAlerts: true,
         minHoursBetweenScans: 0,
@@ -71,10 +71,10 @@ export function canRunBackgroundAudit(
     }
 
     // 2. Does the workspace exceed the tier limit?
-    if (totalMembers > limits.maxMembers) {
+    if (totalMembers > limits.maxGuests) {
         return {
             allowed: false,
-            reason: `Workspace exceeds the guest-account limit for the ${planType.toUpperCase()} plan (max ${limits.maxMembers} guests, found ${totalMembers}).`,
+            reason: `Workspace exceeds the guest-account limit for the ${planType.toUpperCase()} plan (max ${limits.maxGuests} guests, found ${totalMembers}).`,
             requiresUpgrade: true,
         };
     }

@@ -16,7 +16,7 @@ CREATE TABLE workspaces (
     refresh_token TEXT, -- encrypted
     token_expires_at TIMESTAMP WITH TIME ZONE,
     installed_by TEXT NOT NULL, -- slack user id of the installer
-    plan_type TEXT NOT NULL, -- e.g., 'free', 'pro', 'enterprise'
+    plan_type TEXT NOT NULL,
     supports_user_deactivation BOOLEAN DEFAULT FALSE,
     estimated_seat_cost NUMERIC DEFAULT 15.00,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

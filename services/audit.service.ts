@@ -352,7 +352,7 @@ export class AuditService {
         ? workspace.alert_recipients
         : [workspace.installed_by];
 
-      await Promise.allSettled(
+      const dmResults = await Promise.allSettled(
         recipients.map(async (adminId) => {
           await sendDirectMessage(token, adminId, blocks, `Inactive guest <@${guestId}> detected`);
 
@@ -363,6 +363,18 @@ export class AuditService {
           });
         })
       );
+
+      // Log any per-recipient failures so they are visible in the monitoring dashboard
+      for (let i = 0; i < dmResults.length; i++) {
+        const result = dmResults[i];
+        if (result.status === 'rejected') {
+          logger.error('Failed to send DM alert to recipient', {
+            workspaceId: workspace.id,
+            guestId,
+            adminId: recipients[i],
+          }, result.reason);
+        }
+      }
     } catch (err) {
       logger.error('Failed to send DM alerts', { workspaceId: workspace.id, guestId }, err);
     }

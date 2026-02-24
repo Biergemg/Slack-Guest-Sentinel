@@ -14,6 +14,8 @@ const nextConfig = {
         headers: [
           // Prevent clickjacking
           { key: 'X-Frame-Options', value: 'DENY' },
+          // Enforce HTTPS for 2 years + subdomains
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           // Prevent MIME type sniffing
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // Strict referrer policy

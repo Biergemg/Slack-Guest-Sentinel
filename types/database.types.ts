@@ -115,6 +115,8 @@ export interface GuestAudit {
   is_flagged: boolean;
   action_taken: GuestActionTaken | null;
   created_at: string;
+  /** Auto-updated by trigger on every upsert — used for data retention purge */
+  updated_at: string;
 }
 
 export interface GuestAuditUpsert {

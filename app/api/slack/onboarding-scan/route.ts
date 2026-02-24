@@ -19,7 +19,16 @@ import { SESSION, AUDIT } from '@/config/constants';
 export async function GET(request: Request) {
   // Validate session cookie — only the workspace that just installed should scan
   const cookieStore = await cookies();
-  const sessionWorkspaceId = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+  const encryptedSession = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+
+  let sessionWorkspaceId: string | null = null;
+  if (encryptedSession) {
+    try {
+      sessionWorkspaceId = decrypt(encryptedSession);
+    } catch (e) {
+      // tampered cookie
+    }
+  }
 
   const { searchParams } = new URL(request.url);
   const workspaceId = searchParams.get('workspaceId');

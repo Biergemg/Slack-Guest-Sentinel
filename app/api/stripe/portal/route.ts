@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
 import { subscriptionService } from '@/services/subscription.service';
 import { logger } from '@/lib/logger';
 import { SESSION } from '@/config/constants';
@@ -14,7 +15,16 @@ import { SESSION } from '@/config/constants';
  */
 export async function POST(request: Request) {
   const cookieStore = await cookies();
-  const workspaceId = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+  const encryptedSession = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+
+  let workspaceId: string | null = null;
+  if (encryptedSession) {
+    try {
+      workspaceId = decrypt(encryptedSession);
+    } catch (e) {
+      // tampered cookie
+    }
+  }
 
   if (!workspaceId) {
     return NextResponse.redirect(new URL('/?error=unauthorized', request.url));

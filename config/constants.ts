@@ -13,7 +13,7 @@
 export const BILLING = {
   /** Default monthly cost per Slack guest seat in USD */
   DEFAULT_SEAT_COST_USD: 15,
-  /** Free trial period in days for new pro subscriptions */
+  /** Free trial period in days for new paid subscriptions (starter/growth/scale) */
   TRIAL_PERIOD_DAYS: 7,
 } as const;
 
@@ -75,22 +75,10 @@ export const SUBSCRIPTION_STATUS = {
   PAUSED: 'paused',
 } as const;
 
-export const SUBSCRIPTION_PLAN = {
-  FREE: 'free',
-  STARTER: 'starter',
-  GROWTH: 'growth',
-  SCALE: 'scale',
-} as const;
-
 export const GUEST_ACTION = {
   FLAGGED: 'flagged',
   DEACTIVATION_ACCEPTED: 'suggested_deactivation_accepted',
   IGNORED_BY_ADMIN: 'ignored_by_admin',
-} as const;
-
-export const WORKSPACE_PLAN = {
-  STANDARD: 'standard',
-  ENTERPRISE: 'enterprise',
 } as const;
 
 export const WORKSPACE_EVENT_TYPE = {

@@ -372,7 +372,7 @@ export function buildInactiveGuestBlocks(
         type: 'mrkdwn',
         text:
           `*Inactive Guest Detected*\n` +
-          `<@${guestId}> shows no activity in the last 30 days.${sponsorLine}\n` +
+          `<@${guestId}> shows no activity in the last ${AUDIT.ACTIVITY_WINDOW_DAYS} days.${sponsorLine}\n` +
           costLine,
       },
     },

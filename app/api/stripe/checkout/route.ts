@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabase } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
 import { subscriptionService } from '@/services/subscription.service';
 import { logger } from '@/lib/logger';
 import { SESSION } from '@/config/constants';
@@ -16,7 +17,16 @@ import { SESSION } from '@/config/constants';
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
-    const sessionWorkspaceId = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+    const encryptedSession = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+
+    let sessionWorkspaceId: string | null = null;
+    if (encryptedSession) {
+      try {
+        sessionWorkspaceId = decrypt(encryptedSession);
+      } catch (e) {
+        // tampered cookie
+      }
+    }
 
     if (!sessionWorkspaceId) {
       return NextResponse.redirect(new URL('/?error=unauthorized', request.url));
@@ -52,10 +62,12 @@ export async function POST(request: Request) {
       return NextResponse.redirect(new URL('/?error=invalid_workspace', request.url));
     }
 
+    const origin = new URL(request.url).origin;
     const checkoutUrl = await subscriptionService.createCheckoutSession(
       workspace.id,
       workspace.team_name,
-      plan as 'starter' | 'growth' | 'scale'
+      plan as 'starter' | 'growth' | 'scale',
+      origin
     );
 
     return NextResponse.redirect(checkoutUrl, 303);

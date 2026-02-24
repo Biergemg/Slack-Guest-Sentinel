@@ -20,10 +20,15 @@ const initSupabase = () => {
         detectSessionInUrl: false,
       },
     });
-  } catch {
-    // If env vars are missing during `next build` static generation checks,
-    // return a dummy client so the build doesn't crash.
-    // Protected by `export const dynamic = 'force-dynamic'` in routes.
+  } catch (err) {
+    // In production, missing env vars must surface immediately — never silently
+    // use a dummy client (matches the behavior of lib/stripe.ts).
+    if (env.IS_PRODUCTION) {
+      throw err;
+    }
+    // During `next build` static generation checks in dev/CI, return a dummy
+    // client so the build doesn't crash.
+    // Protected by `export const dynamic = 'force-dynamic'` in all routes.
     return createClient('https://placeholder.supabase.co', 'placeholder');
   }
 };

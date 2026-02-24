@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { supabase } from '@/lib/db';
+import { decrypt } from '@/lib/encryption';
 import { StatsRow } from '@/components/dashboard/stats-row';
 import { FlaggedGuestsTable } from '@/components/dashboard/flagged-guests-table';
 import { EmptyState } from '@/components/dashboard/empty-state';
@@ -21,7 +22,16 @@ export default async function Dashboard({
 }) {
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
-  const workspaceId = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+  const encryptedSession = cookieStore.get(SESSION.COOKIE_NAME)?.value;
+
+  let workspaceId: string | null = null;
+  if (encryptedSession) {
+    try {
+      workspaceId = decrypt(encryptedSession);
+    } catch (e) {
+      // Tampered cookie
+    }
+  }
 
   if (!workspaceId) {
     redirect('/?error=unauthorized');

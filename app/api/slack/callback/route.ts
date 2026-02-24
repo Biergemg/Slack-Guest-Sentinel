@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     const onboardingUrl = new URL(`/onboarding?workspaceId=${workspace.id}`, request.url);
     const response = NextResponse.redirect(onboardingUrl);
 
-    response.cookies.set(SESSION.COOKIE_NAME, workspace.id, {
+    response.cookies.set(SESSION.COOKIE_NAME, encrypt(workspace.id), {
       httpOnly: true,
       secure: env.IS_PRODUCTION,
       sameSite: 'lax',

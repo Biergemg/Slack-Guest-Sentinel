@@ -1,7 +1,9 @@
 {
   "name": "slack-guest-sentinel",
   "version": "1.0.0",
-  "main": "index.js",
+  "private": true,
+  "description": "Automatically detect inactive Multi-Channel Guests in Slack and save on wasted seats.",
+  "author": "BiergePoince",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,10 +12,7 @@
     "type-check": "tsc --noEmit",
     "validate": "tsc --noEmit && npm run lint"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "@tailwindcss/postcss": "^4.2.0",

@@ -20,19 +20,19 @@ const stripe = new Stripe(secretKey, {
 const productsToCreate = [
     {
         name: 'Slack Guest Sentinel Starter',
-        description: 'Up to 500 total workspace members. Automated audits and DM alerts.',
+        description: 'Up to 500 multi-channel guests. Automated audits and DM alerts.',
         price: 2900, // $29.00
         lookup_key: 'starter_monthly',
     },
     {
         name: 'Slack Guest Sentinel Growth',
-        description: 'Up to 5,000 total workspace members. Automated audits and multi-admin alerts.',
+        description: 'Up to 5,000 multi-channel guests. Automated audits and multi-admin alerts.',
         price: 7900, // $79.00
         lookup_key: 'growth_monthly',
     },
     {
         name: 'Slack Guest Sentinel Scale',
-        description: 'Unlimited workspace members. Full enterprise protection and reporting.',
+        description: 'Unlimited multi-channel guests. Full enterprise protection and reporting.',
         price: 19900, // $199.00
         lookup_key: 'scale_monthly',
     },
