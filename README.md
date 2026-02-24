@@ -139,7 +139,9 @@ supabase db push
 
 ### 4. Configure the Slack app
 
-Import `slack_manifest.json` in your Slack app settings and update the URLs to match your deployment URL or local tunnel.
+1. Import `slack_manifest.json` in your Slack app settings to set up the basic configuration.
+2. Go to **OAuth & Permissions → Redirect URLs** and add your specific callback URL (e.g., `https://<your-ngrok-id>.ngrok.io/api/slack/callback`). If you skip this, step 1 of the install flow will fail!
+3. Ensure all other Request URLs (Events, Action) match your deployment URL or local tunnel.
 
 Required OAuth scopes (user token):
 - `users:read` — fetch guest list
