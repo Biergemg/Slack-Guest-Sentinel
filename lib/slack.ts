@@ -404,3 +404,40 @@ export function buildInactiveGuestBlocks(
     },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Token Refresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Refreshes a Slack access token using a refresh token.
+ */
+export async function refreshSlackToken(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}> {
+  const params = new URLSearchParams({
+    client_id: env.SLACK_CLIENT_ID,
+    client_secret: env.SLACK_CLIENT_SECRET,
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+  });
+
+  const res = await fetch(`${SLACK_API.BASE_URL}/oauth.v2.access`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+
+  const body = await res.json();
+  if (!body.ok) {
+    throw new Error(`Slack token refresh failed: ${body.error}`);
+  }
+
+  return {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_in: body.expires_in,
+  };
+}

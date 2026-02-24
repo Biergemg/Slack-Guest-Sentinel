@@ -13,13 +13,14 @@
  */
 
 import { supabase } from '@/lib/db';
-import { decrypt } from '@/lib/encryption';
+import { decrypt, encrypt } from '@/lib/encryption';
 import {
   getGuests,
   getLastMessageTs,
   getUserPresence,
   sendDirectMessage,
   buildInactiveGuestBlocks,
+  refreshSlackToken,
 } from '@/lib/slack';
 import { logger } from '@/lib/logger';
 import { canRunBackgroundAudit } from '@/lib/subscription';
@@ -114,7 +115,26 @@ export class AuditService {
     logger.info('Auditing workspace', { workspaceId: workspace.id, teamName: workspace.team_name });
 
     try {
-      const token = decrypt(workspace.access_token);
+      let token = decrypt(workspace.access_token);
+
+      if (workspace.refresh_token && workspace.token_expires_at) {
+        const expiresAt = new Date(workspace.token_expires_at).getTime();
+        // If it expires in less than 5 minutes, refresh
+        if (Date.now() > expiresAt - 5 * 60 * 1000) {
+          logger.info('Refreshing Slack token', { workspaceId: workspace.id });
+          const newTokens = await refreshSlackToken(decrypt(workspace.refresh_token));
+
+          token = newTokens.access_token;
+
+          const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
+          await supabase.from('workspaces').update({
+            access_token: encrypt(newTokens.access_token),
+            refresh_token: encrypt(newTokens.refresh_token),
+            token_expires_at: newExpiresAt,
+          }).eq('id', workspace.id);
+        }
+      }
+
       const guests = await getGuests(token);
       const costPerSeat = workspace.estimated_seat_cost ?? BILLING.DEFAULT_SEAT_COST_USD;
 
@@ -319,20 +339,23 @@ export class AuditService {
   ): Promise<void> {
     try {
       const blocks = buildInactiveGuestBlocks(guestId, costPerSeat, sponsorId);
-      await sendDirectMessage(
-        token,
-        workspace.installed_by,
-        blocks,
-        `Inactive guest <@${guestId}> detected`
-      );
+      const recipients = workspace.alert_recipients && workspace.alert_recipients.length > 0
+        ? workspace.alert_recipients
+        : [workspace.installed_by];
 
-      await supabase.from('events').insert({
-        workspace_id: workspace.id,
-        type: WORKSPACE_EVENT_TYPE.DM_ALERT_SENT,
-        payload: { guest_id: guestId, admin_id: workspace.installed_by, sponsor_id: sponsorId },
-      });
+      await Promise.allSettled(
+        recipients.map(async (adminId) => {
+          await sendDirectMessage(token, adminId, blocks, `Inactive guest <@${guestId}> detected`);
+
+          await supabase.from('events').insert({
+            workspace_id: workspace.id,
+            type: WORKSPACE_EVENT_TYPE.DM_ALERT_SENT,
+            payload: { guest_id: guestId, admin_id: adminId, sponsor_id: sponsorId },
+          });
+        })
+      );
     } catch (err) {
-      logger.error('Failed to send DM alert', { workspaceId: workspace.id, guestId }, err);
+      logger.error('Failed to send DM alerts', { workspaceId: workspace.id, guestId }, err);
     }
   }
 }

@@ -50,6 +50,7 @@ export interface Workspace {
   token_expires_at: string | null;
   /** Slack user ID of the person who installed the app */
   installed_by: string;
+  alert_recipients: string[];
   plan_type: WorkspacePlanType;
   supports_user_deactivation: boolean;
   estimated_seat_cost: number;
@@ -67,6 +68,7 @@ export interface WorkspaceInsert {
   refresh_token?: string | null;
   token_expires_at?: string | null;
   installed_by: string;
+  alert_recipients?: string[];
   plan_type?: WorkspacePlanType;
   supports_user_deactivation: boolean;
   estimated_seat_cost?: number;
