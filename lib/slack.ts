@@ -361,6 +361,10 @@ export function buildInactiveGuestBlocks(
 ): SlackBlock[] {
   const sponsorLine = sponsorId ? `\nOriginally invited by <@${sponsorId}>.` : '';
 
+  const costLine = costPerSeatMonthly > 0
+    ? `Estimated cost: *$${costPerSeatMonthly}/month* ($${costPerSeatMonthly * 12}/year).`
+    : `Estimated cost: *$0/month* (Single-Channel guests are free, but pose a security risk if inactive).`;
+
   return [
     {
       type: 'section',
@@ -369,7 +373,7 @@ export function buildInactiveGuestBlocks(
         text:
           `*Inactive Guest Detected*\n` +
           `<@${guestId}> shows no activity in the last 30 days.${sponsorLine}\n` +
-          `Estimated cost: *$${costPerSeatMonthly}/month* ($${costPerSeatMonthly * 12}/year).`,
+          costLine,
       },
     },
     {

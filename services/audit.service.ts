@@ -165,23 +165,27 @@ export class AuditService {
 
       // Send DM alerts in parallel (failures isolated per guest)
       await Promise.allSettled(
-        inactiveGuests.map(sg =>
-          this.sendInactiveAlert(
+        inactiveGuests.map(sg => {
+          const isMultiChannel = sg.guest.is_restricted && !sg.guest.is_ultra_restricted;
+          const actualSeatCost = isMultiChannel ? costPerSeat : 0;
+          return this.sendInactiveAlert(
             token,
             workspace,
             sg.guest.id,
-            costPerSeat,
+            actualSeatCost,
             sponsorMap.get(sg.guest.id) ?? null
-          )
-        )
+          );
+        })
       );
+
+      const paidInactiveGuests = inactiveGuests.filter(sg => sg.guest.is_restricted && !sg.guest.is_ultra_restricted);
 
       // Record audit snapshot
       const runData: AuditRunInsert = {
         workspace_id: workspace.id,
         workspace_guest_count: scoredGuests.length,
         workspace_inactive_count: inactiveGuests.length,
-        workspace_estimated_waste: inactiveGuests.length * costPerSeat,
+        workspace_estimated_waste: paidInactiveGuests.length * costPerSeat,
       };
       await supabase.from('audit_runs').insert(runData);
 
@@ -267,15 +271,20 @@ export class AuditService {
   ): Promise<void> {
     if (guests.length === 0) return;
 
-    const records: GuestAuditUpsert[] = guests.map(sg => ({
-      workspace_id: workspaceId,
-      slack_user_id: sg.guest.id,
-      last_seen_source: sg.source,
-      estimated_cost_monthly: costPerSeat,
-      estimated_cost_yearly: costPerSeat * 12,
-      is_flagged: true,
-      action_taken: GUEST_ACTION.FLAGGED,
-    }));
+    const records: GuestAuditUpsert[] = guests.map(sg => {
+      const isMultiChannel = sg.guest.is_restricted && !sg.guest.is_ultra_restricted;
+      const actualMonthCost = isMultiChannel ? costPerSeat : 0;
+
+      return {
+        workspace_id: workspaceId,
+        slack_user_id: sg.guest.id,
+        last_seen_source: sg.source,
+        estimated_cost_monthly: actualMonthCost,
+        estimated_cost_yearly: actualMonthCost * 12,
+        is_flagged: true,
+        action_taken: GUEST_ACTION.FLAGGED,
+      };
+    });
 
     const { error } = await supabase
       .from('guest_audits')

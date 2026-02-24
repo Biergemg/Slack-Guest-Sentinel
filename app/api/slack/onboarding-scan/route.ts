@@ -60,20 +60,34 @@ export async function GET(request: Request) {
 
     const members: Array<{ deleted?: boolean; is_restricted?: boolean; is_ultra_restricted?: boolean; is_bot?: boolean }> =
       data.members ?? [];
-    const guests = members.filter(
+
+    // Multi-channel guests (is_restricted but not ultra_restricted) cost money.
+    // Single-channel guests (is_ultra_restricted) are free.
+    const allGuests = members.filter(
       m => !m.deleted && !m.is_bot && (m.is_restricted || m.is_ultra_restricted)
     );
-    const guestCount = guests.length;
+
+    let paidGuestsCount = 0;
+    allGuests.forEach(g => {
+      if (g.is_restricted && !g.is_ultra_restricted) {
+        paidGuestsCount++;
+      }
+    });
+
+    const guestCount = allGuests.length;
 
     // Estimate inactivity at 20% — avoids scoring API calls during onboarding.
     // Real multi-signal audit runs via the nightly cron.
     const inactiveCount = guestCount > 0 ? Math.max(1, Math.floor(guestCount * 0.20)) : 0;
+    const inactivePaidCount = paidGuestsCount > 0 ? Math.max(1, Math.floor(paidGuestsCount * 0.20)) : 0;
+
     const costPerSeat = Number(workspace.estimated_seat_cost || 15);
-    const monthlyWaste = inactiveCount * costPerSeat;
+    const monthlyWaste = inactivePaidCount * costPerSeat;
 
     // Artificial delay so the "Scanning..." step is visible (UX — not a bug)
     await new Promise(r => setTimeout(r, 2000));
 
+    // Return the total inactive guests for the UI, but the monthly waste based only on paid ones.
     return NextResponse.json({ totalGuests: guestCount, inactiveGuests: inactiveCount, monthlyWaste });
   } catch (err) {
     logger.error('Onboarding scan: unexpected error', { workspaceId }, err);
