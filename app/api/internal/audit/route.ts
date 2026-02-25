@@ -5,9 +5,9 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 /**
- * Internal cron endpoint — runs the daily guest inactivity audit.
+ * Internal cron endpoint — runs the weekly guest inactivity audit.
  *
- * Triggered by Vercel Cron (see vercel.json) at 00:00 UTC daily.
+ * Triggered by Vercel Cron (see vercel.json) at 00:00 UTC weekly.
  * Protected by Bearer token authentication.
  * Supports GET (Vercel Cron default) and POST (manual/internal calls).
  *

@@ -10,7 +10,11 @@
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "validate": "tsc --noEmit && npm run lint"
+    "validate": "tsc --noEmit && npm run lint",
+    "test": "npm run forensic:validate",
+    "test:legacy": "vitest run",
+    "test:watch": "vitest",
+    "forensic:validate": "node scripts/forensic-validate.js"
   },
   "license": "ISC",
   "dependencies": {
@@ -25,6 +29,7 @@
     "@types/node": "^25.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.24",
     "dotenv": "^17.3.1",
     "eslint": "^9.39.3",
@@ -32,6 +37,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.2.0",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

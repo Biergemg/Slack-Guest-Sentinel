@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION } from '@/config/constants';
-import { decrypt } from '@/lib/encryption';
 
 /**
  * Protects authenticated routes at the Edge.
@@ -16,17 +15,10 @@ export function middleware(request: NextRequest) {
     if (pathname.startsWith('/dashboard')) {
         const session = request.cookies.get(SESSION.COOKIE_NAME);
 
-        let valid = false;
-        if (session?.value) {
-            try {
-                const workspaceId = decrypt(session.value);
-                if (workspaceId) valid = true;
-            } catch (e) {
-                // Invalid or tampered cookie
-            }
-        }
-
-        if (!valid) {
+        // In Edge runtime, we only check for cookie presence. 
+        // Real validation (AES-GCM decryption using Node crypto) happens in the 
+        // Server Components handling /dashboard routes (e.g. app/dashboard/page.tsx).
+        if (!session?.value) {
             const redirectUrl = new URL('/', request.url);
             redirectUrl.searchParams.set('error', 'unauthorized');
             return NextResponse.redirect(redirectUrl);

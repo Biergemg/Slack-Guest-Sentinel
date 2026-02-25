@@ -10,6 +10,7 @@ const eslintConfig = [
       'out/**',
       'build/**',
       'next-env.d.ts',
+      'tests/**',
       'scripts/**',
       'test-*.js',
       'test-db.js',

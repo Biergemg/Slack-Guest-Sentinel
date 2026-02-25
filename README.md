@@ -7,7 +7,7 @@ Slack charges for every **Multi-Channel Guest** seat — whether they're active 
 1. Admin installs the app via Slack OAuth
 2. Onboarding scan shows estimated monthly waste from inactive guests
 3. Admin starts a 7-day free trial via Stripe
-4. A daily audit runs at midnight UTC, scoring each guest for inactivity
+4. A weekly audit runs at midnight UTC, scoring each guest for inactivity
 5. Inactive guests trigger a DM alert with **Deactivate** / **Ignore** buttons
 6. Dashboard shows flagged guests and audit history
 
@@ -234,7 +234,7 @@ Seven tables, all with RLS enabled (service role access only):
 
 **Lazy env getters** — `lib/env.ts` uses JavaScript getters so validation fires at request time, not during `next build`. The build works even when development env vars are incomplete.
 
-**Batch operations** — the audit service batches DB upserts per workspace (not per guest) and processes workspaces in parallel groups of 5, keeping the daily cron fast even at scale.
+**Batch operations** — the audit service batches DB upserts per workspace (not per guest) and processes workspaces in parallel groups of 5, keeping the weekly cron fast even at scale.
 
 **Structured logging** — all operations emit JSON logs in production (compatible with Datadog, Logtail, etc.) and human-readable output in development.
 
@@ -249,7 +249,15 @@ npm run start        # Production server
 npm run type-check   # TypeScript check (no emit)
 npm run lint         # ESLint (flat config)
 npm run validate     # type-check + lint
+npm test             # Forensic validation (real Stripe + Supabase checks, no mocks)
+npm run test:legacy  # Legacy Vitest suite (mocked; pending refactor)
 ```
+
+`npm test` performs production-critical checks with real credentials from `.env.local`:
+- verifies required env vars
+- validates Stripe prices and creates real checkout sessions for all plans
+- validates Supabase critical upserts (`subscriptions`, `guest_audits`)
+- validates `stripe_events_history` state lifecycle
 
 ---
 
@@ -257,7 +265,7 @@ npm run validate     # type-check + lint
 
 1. Import the repository in Vercel.
 2. Add all environment variables from `.env.example`.
-3. The daily audit cron is configured in `vercel.json` and runs at `0 0 * * *` (midnight UTC).
+3. The weekly audit cron is configured in `vercel.json` and runs at `0 0 * * 0` (midnight UTC).
 4. Set the Stripe webhook endpoint to `https://your-domain.com/api/stripe/webhook`.
 
 ---

@@ -33,4 +33,20 @@ const initSupabase = () => {
   }
 };
 
-export const supabase = initSupabase();
+type SupabaseClient = ReturnType<typeof initSupabase>;
+
+let supabaseInstance: SupabaseClient | null = null;
+
+export const getSupabase = () => {
+  if (!supabaseInstance) {
+    supabaseInstance = initSupabase();
+  }
+  return supabaseInstance as SupabaseClient;
+};
+
+// Deprecated lazy getter for compatibility, but we should migrate to getSupabase() where possible.
+export const supabase = new Proxy({} as SupabaseClient, {
+  get: (target, prop) => {
+    return getSupabase()[prop as keyof SupabaseClient];
+  }
+});

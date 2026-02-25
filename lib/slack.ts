@@ -120,10 +120,16 @@ export async function verifySlackSignature(
     return { valid: false, body: '', error: 'Missing Slack signature headers' };
   }
 
-  // Reject requests older than 5 minutes to prevent replay attacks
-  const ageSeconds = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+  const timestampMs = parseInt(timestamp, 10);
+  if (isNaN(timestampMs)) {
+    return { valid: false, body: '', error: 'Invalid timestamp format' };
+  }
+
+  // Reject requests older than 5 minutes to prevent replay attacks,
+  // and reject requests with future timestamps.
+  const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - timestampMs);
   if (ageSeconds > SLACK_API.SIGNATURE_MAX_AGE_SECONDS) {
-    return { valid: false, body: '', error: `Request timestamp too old (${ageSeconds}s)` };
+    return { valid: false, body: '', error: `Request timestamp out of bounds (${ageSeconds}s difference)` };
   }
 
   const body = await request.text();

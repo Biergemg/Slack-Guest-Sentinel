@@ -28,4 +28,18 @@ const initStripe = () => {
   }
 };
 
-export const stripe = initStripe();
+let stripeInstance: Stripe | null = null;
+
+export const getStripe = () => {
+  if (!stripeInstance) {
+    stripeInstance = initStripe();
+  }
+  return stripeInstance;
+};
+
+// Lazy proxy to prevent eager evaluation on module load
+export const stripe = new Proxy({} as Stripe, {
+  get: (target, prop) => {
+    return getStripe()[prop as keyof Stripe];
+  }
+});
